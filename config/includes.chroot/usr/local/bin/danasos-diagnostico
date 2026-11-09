@@ -1,0 +1,32 @@
+#!/usr/bin/python3
+"""Mostra o estado do hardware e do desktop para validação local."""
+
+import shlex
+import shutil
+import subprocess
+
+COMANDOS = (
+    ("uname", "-r"),
+    ("mokutil", "--sb-state"),
+    ("lspci", "-nnk"),
+    ("nmcli", "device", "status"),
+    ("wpctl", "status"),
+    ("xrandr", "--current"),
+    ("nvidia-smi", "-L"),
+    ("vulkaninfo", "--summary"),
+    ("flatpak", "list", "--app"),
+    ("systemd-analyze", "time"),
+    ("free", "-h"),
+)
+
+for comando in COMANDOS:
+    print(f"\n$ {shlex.join(comando)}", flush=True)
+    if shutil.which(comando[0]):
+        try:
+            processo = subprocess.run(comando, timeout=15)
+            if processo.returncode:
+                print(f"Código de saída {processo.returncode}")
+        except subprocess.TimeoutExpired:
+            print("Tempo de consulta excedido.")
+    else:
+        print("Comando não instalado.")

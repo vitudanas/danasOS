@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Autorização gráfica
+Exec=lxpolkit
+OnlyShowIn=XFCE;
+NoDisplay=true

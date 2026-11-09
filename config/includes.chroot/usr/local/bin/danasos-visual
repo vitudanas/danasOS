@@ -1,0 +1,47 @@
+#!/usr/bin/python3
+"""Aplica os padrões visuais uma vez por conta, sem processo residente."""
+
+import os
+from pathlib import Path
+import re
+import subprocess
+
+ARTE = Path("/usr/share/danasos")
+ESTADO = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "danasos"
+
+
+def consultar(*args):
+    return subprocess.check_output(args, text=True).strip()
+
+
+def definir(canal, chave, tipo, valor):
+    subprocess.run(
+        ["xfconf-query", "-c", canal, "-p", chave, "-n", "-t", tipo, "-s", valor],
+        check=True,
+    )
+
+
+def aplicar_visual():
+    definir("xsettings", "/Net/ThemeName", "string", "danasOS")
+    definir("xsettings", "/Net/IconThemeName", "string", "Papirus-Dark")
+    definir("xfce4-session", "/general/SaveOnExit", "bool", "false")
+    caminhos = consultar("xfconf-query", "-c", "xfce4-desktop", "-l")
+    papeis = {chave for chave in caminhos.splitlines() if re.fullmatch(
+        r"/backdrop/screen\d+/monitor[^/]+/workspace\d+/last-image", chave
+    )}
+    for saida in consultar("xrandr", "--query").splitlines():
+        monitor = re.match(r"^(\S+) connected (?:primary )?\d+x\d+[+-]", saida)
+        if monitor:
+            papeis.add(f"/backdrop/screen0/monitor{monitor[1]}/workspace0/last-image")
+    if not papeis:
+        raise RuntimeError("Nenhum monitor Xfce detectado.")
+    for papel in sorted(papeis):
+        definir("xfce4-desktop", papel, "string", str(ARTE / "noite-em-neon.png"))
+
+
+if __name__ == "__main__":
+    marcador = ESTADO / "visual-0.2"
+    if not marcador.is_file():
+        aplicar_visual()
+        ESTADO.mkdir(parents=True, exist_ok=True)
+        marcador.touch()

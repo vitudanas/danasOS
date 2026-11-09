@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=X-GNOME-Metatheme
+Name=danasOS
+Comment=Noite em Neon
+
+[X-GNOME-Metatheme]
+GtkTheme=danasOS
+IconTheme=Papirus-Dark

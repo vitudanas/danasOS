@@ -1,0 +1,51 @@
+# Produtos da compilação e da montagem da mídia
+/dist/
+/build-danasos-*/
+/site/
+/publicacao/
+*.iso
+*.iso.part-*
+*.sha256
+*.deb
+*.zip
+
+# Segredos e configurações locais
+.env
+.env.*
+*.asc
+*.gpg
+*.kbx
+*.key
+*.pem
+*.pfx
+*.p12
+*.token
+.gnupg/
+.ssh/
+secrets/
+private/
+id_rsa*
+id_ed25519*
+credentials.json
+
+# Arquivos de editor, logs e caches
+__pycache__/
+*.py[cod]
+*.log
+.venv/
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# A publicação contém somente estes arquivos públicos verificáveis.
+!/publicacao/
+/publicacao/*
+!/publicacao/danasos-publica.asc
+!/publicacao/apt/
+/publicacao/apt/*
+!/publicacao/apt/Release
+!/publicacao/apt/InRelease
+!/publicacao/apt/Packages
+!/publicacao/apt/danasos-experience_*_all.deb

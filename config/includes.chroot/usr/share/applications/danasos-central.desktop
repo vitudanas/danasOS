@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Central danasOS
+Comment=Jogos, loja e ferramentas do sistema
+Exec=/usr/bin/python3 /usr/share/danasos/central.py
+Icon=/usr/share/danasos/danasos.svg
+Terminal=false
+Categories=Game;System;
+StartupNotify=true

@@ -1,0 +1,116 @@
+#!/usr/bin/python3
+"""Finaliza identidade, atalhos e aplicativos antes de compactar o live."""
+
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+
+ARTE = Path("/usr/share/danasos")
+sys.path.insert(0, str(ARTE))
+from catalogo import APLICATIVOS
+
+OCULTO = "[Desktop Entry]\nType=Application\nName={nome}\nHidden=true\n"
+FLATHUB = "https://flathub.org/repo/flathub.flatpakrepo"
+
+
+def rodar(*args):
+    subprocess.run(args, check=True)
+
+
+def identidade():
+    release = Path("/etc/os-release")
+    # Substitui somente a identidade visível do projeto. Mantém o os-release da base.
+    release.unlink(missing_ok=True)
+    release.write_text(
+        'PRETTY_NAME="danasOS 0.2 (Noite em Neon)"\n'
+        'NAME="danasOS"\nID=danasos\nID_LIKE=debian\n'
+        'VERSION_ID="0.2"\nVERSION="0.2 (Noite em Neon)"\n'
+        'VERSION_CODENAME=trixie\nDEBIAN_CODENAME=trixie\n'
+        'ANSI_COLOR="0;35"\n',
+        encoding="utf-8",
+    )
+    grub = Path("/etc/default/grub.d")
+    grub.mkdir(parents=True, exist_ok=True)
+    (grub / "90-danasos.cfg").write_text(
+        'GRUB_DISTRIBUTOR="danasOS"\nGRUB_DISABLE_OS_PROBER=false\n',
+        encoding="utf-8",
+    )
+
+
+def marca_instalador():
+    calamares = Path("/etc/calamares")
+    origem = calamares / "branding/debian"
+    destino = calamares / "branding/danasos"
+    shutil.copytree(origem, destino, dirs_exist_ok=True)
+    config = destino / "branding.desc"
+    texto = config.read_text(encoding="utf-8")
+    texto = re.sub(r"(?m)^(\s*componentName\s*:)\s*.*$", r"\1 danasos", texto)
+    texto = re.sub(
+        r"(?m)^(\s*(?:productName|shortProductName|versionedName|shortVersionedName)\s*:)\s*.*$",
+        r"\1 danasOS",
+        texto,
+    )
+    config.write_text(texto, encoding="utf-8")
+    for nome in ("slide1.png", "welcome.png"):
+        shutil.copyfile(ARTE / "noite-em-neon.png", destino / nome)
+    shutil.copyfile(ARTE / "danasos.svg", destino / "danasos.svg")
+    texto = config.read_text(encoding="utf-8").replace("debian-logo.png", "danasos.svg")
+    config.write_text(texto, encoding="utf-8")
+    settings = calamares / "settings.conf"
+    texto, contagem = re.subn(r"(?m)^branding:[ \t]*(?:debian|danasos)[ \t]*$", "branding: danasos",
+                              settings.read_text(encoding="utf-8"))
+    if contagem != 1:
+        raise RuntimeError("Não consegui selecionar a marca do instalador.")
+    # Os pacotes de GRUB e criptografia já estão na imagem. O instalador
+    # não precisa procurar um repositório APT no próprio pendrive.
+    texto = re.sub(r"(?m)^ +-[ \t]+sources-media(?:-unmount)?[ \t]*\n", "", texto)
+    settings.write_text(texto, encoding="utf-8")
+    bootloader = calamares / "modules/bootloader.conf"
+    texto = bootloader.read_text(encoding="utf-8")
+    bootloader.write_text(texto.replace("installEFIFallback: true", "installEFIFallback: false"),
+                          encoding="utf-8")
+    helper = Path("/usr/share/calamares/helpers/calamares-sources-final")
+    texto = helper.read_text(encoding="utf-8")
+    texto = texto.replace("main non-free-firmware", "main contrib non-free non-free-firmware")
+    helper.write_text(texto, encoding="utf-8")
+    atalho = Path("/usr/share/applications/calamares-install-debian.desktop")
+    texto = atalho.read_text(encoding="utf-8")
+    texto = texto.replace("Name=Install Debian", "Name=Instalar danasOS")
+    texto = texto.replace("Icon=install-debian", "Icon=/usr/share/danasos/danasos.svg")
+    atalho.write_text(texto, encoding="utf-8")
+
+
+def autostart():
+    # A loja continua abrindo pelo menu. A entrada original fica desviada
+    # para que atualizações do pacote preservem o login sem a loja em segundo plano.
+    for nome in ("org.gnome.Software", "lxpolkit"):
+        arquivo = f"/etc/xdg/autostart/{nome}.desktop"
+        if subprocess.check_output(["dpkg-divert", "--list", arquivo], text=True).strip() == "":
+            rodar("dpkg-divert", "--local", "--rename", "--add", arquivo)
+
+    diretorio = Path("/etc/xdg/autostart")
+    nomes = {"steam", "steam-autostart", "heroic", "lutris"}
+    nomes.update(identificador for _, _, identificador in APLICATIVOS)
+    for nome in sorted(nomes):
+        (diretorio / f"{nome}.desktop").write_text(OCULTO.format(nome=nome), encoding="utf-8")
+
+
+def instalar_apps():
+    rodar("flatpak", "--system", "remote-add", "--if-not-exists", "flathub", FLATHUB)
+    ids = [identificador for _, _, identificador in APLICATIVOS]
+    rodar("flatpak", "--system", "install", "--noninteractive", "-y", "flathub", *ids)
+    instalados = set(subprocess.check_output(
+        ["flatpak", "--system", "list", "--app", "--columns=application"], text=True
+    ).split())
+    faltando = set(ids) - instalados
+    if faltando:
+        raise RuntimeError("Faltam launchers na imagem: " + ", ".join(sorted(faltando)))
+
+
+if __name__ == "__main__":
+    instalar_apps()
+    autostart()
+    marca_instalador()
+    identidade()

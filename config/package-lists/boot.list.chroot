@@ -1,0 +1,9 @@
+grub-efi
+grub-efi-amd64-signed
+shim-signed
+efibootmgr
+os-prober
+live-boot
+live-config
+live-config-systemd
+cryptsetup-initramfs

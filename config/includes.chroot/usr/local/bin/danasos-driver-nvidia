@@ -1,0 +1,61 @@
+#!/usr/bin/python3
+"""Instala os módulos abertos e o driver da NVIDIA no danasOS instalado."""
+
+import os
+from pathlib import Path
+import platform
+import subprocess
+import sys
+import tempfile
+
+REPO = "https://developer.download.nvidia.com/compute/cuda/repos/debian13/x86_64"
+MOK = Path("/var/lib/dkms/mok.pub")
+
+
+def rodar(*args):
+    subprocess.run(args, check=True)
+
+
+def instalar():
+    if os.geteuid() != 0:
+        raise RuntimeError("Execute sudo danasos-driver-nvidia após instalar no SSD.")
+    if os.freedesktop_os_release().get("ID") != "danasos":
+        raise RuntimeError("Utilitário exclusivo do danasOS.")
+    if "boot=live" in Path("/proc/cmdline").read_text().split():
+        raise RuntimeError("Inicie pelo SSD antes de instalar o driver.")
+    pci = subprocess.check_output(["lspci", "-Dnd", "10de:"], text=True)
+    if not any(" 0300:" in linha or " 0302:" in linha for linha in pci.splitlines()):
+        raise RuntimeError("Não encontrei uma GPU NVIDIA.")
+    with tempfile.TemporaryDirectory(prefix="danasos-nvidia-") as pasta:
+        keyring = str(Path(pasta) / "cuda-keyring_1.1-1_all.deb")
+        rodar("curl", "--fail", "--silent", "--show-error", "--location",
+              "--proto", "=https", "--proto-redir", "=https",
+              f"{REPO}/cuda-keyring_1.1-1_all.deb", "--output", keyring)
+        rodar("dpkg", "-i", keyring)
+    rodar("apt-get", "-o", "APT::Update::Error-Mode=any", "update")
+    rodar("apt-get", "install", "--no-install-recommends",
+          f"linux-headers-{platform.release()}", "nvidia-open")
+    rodar("modinfo", "-k", platform.release(), "-F", "version", "nvidia")
+    if Path("/sys/firmware/efi").exists():
+        estado = subprocess.check_output(["mokutil", "--sb-state"], text=True, env={**os.environ, "LC_ALL": "C"})
+        if "SecureBoot enabled" in estado:
+            assinante = subprocess.check_output(
+                ["modinfo", "-k", platform.release(), "-F", "signer", "nvidia"], text=True
+            ).strip()
+            if not assinante:
+                raise RuntimeError("O módulo NVIDIA não está assinado. Confira o DKMS antes de reiniciar.")
+            if not MOK.is_file():
+                raise RuntimeError(f"Certificado DKMS ausente em {MOK}. Confira a assinatura antes de reiniciar.")
+            chave = subprocess.run(["mokutil", "--test-key", str(MOK)], check=False)
+            if chave.returncode != 0:
+                rodar("mokutil", "--import", str(MOK))
+                print("No próximo boot, selecione Enroll MOK e confirme a senha temporária.")
+    print("Reinicie. Depois confira nvidia-smi -L e atualize os Flatpaks pela loja.")
+
+
+if __name__ == "__main__":
+    try:
+        instalar()
+    except (RuntimeError, OSError, subprocess.CalledProcessError) as erro:
+        print(f"Driver NVIDIA: {erro}", file=sys.stderr)
+        sys.exit(1)

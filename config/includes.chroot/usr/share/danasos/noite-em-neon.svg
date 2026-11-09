@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1600" viewBox="0 0 2560 1600">
+  <title>danasOS — Noite em Neon</title>
+  <defs>
+    <linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#10091b"/><stop offset=".62" stop-color="#180e24"/><stop offset="1" stop-color="#0c1512"/>
+    </linearGradient>
+    <radialGradient id="roxo">
+      <stop stop-color="#6b28a5" stop-opacity=".58"/><stop offset="1" stop-color="#6b28a5" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="verde">
+      <stop stop-color="#6ea733" stop-opacity=".36"/><stop offset="1" stop-color="#6ea733" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="faceta" x1="0" x2="1" y1="0" y2="1">
+      <stop stop-color="#b77ef8"/><stop offset=".53" stop-color="#64319e"/><stop offset="1" stop-color="#291544"/>
+    </linearGradient>
+    <linearGradient id="brilho" x1="0" x2="1" y1="0" y2="1">
+      <stop stop-color="#caff85"/><stop offset="1" stop-color="#65ad3d"/>
+    </linearGradient>
+    <pattern id="grade" width="52" height="52" patternUnits="userSpaceOnUse">
+      <path d="M0 52V0H52" fill="none" stroke="#be96dd" opacity=".11"/>
+      <circle cx="0" cy="0" r="2" fill="#d5acef" opacity=".24"/>
+    </pattern>
+  </defs>
+  <rect width="2560" height="1600" fill="url(#fundo)"/>
+  <ellipse cx="1510" cy="645" rx="1030" ry="900" fill="url(#roxo)"/>
+  <ellipse cx="2160" cy="1230" rx="920" ry="610" fill="url(#verde)"/>
+  <path d="M1210 0H2560V1600H1000L1310 1110 1115 860 1555 565Z" fill="url(#grade)"/>
+  <g fill="none" opacity=".44">
+    <path d="M0 1232H425L803 1475H1298L1440 1300H1788L2278 888H2560" stroke="#8a54be" stroke-width="2"/>
+    <path d="M0 1264H413L802 1510H1320L1460 1328H1804L2298 916H2560" stroke="#8a54be" stroke-width="1"/>
+    <path d="M2185 0 2122 246 2312 399 2410 684 2560 723M2231 0 2161 239 2343 384 2440 660 2560 693" stroke="#8855bb" stroke-width="2"/>
+    <path d="M1790 1598 1990 1350 2260 1290 2460 1105H2560" stroke="#9fdf65" stroke-width="3"/>
+    <path d="M1830 1598 2010 1380 2272 1320 2472 1134H2560" stroke="#9fdf65" stroke-width="1"/>
+  </g>
+  <g transform="translate(1870 749) rotate(17)">
+    <rect x="-333" y="-492" width="666" height="984" rx="52" fill="#0e0915" opacity=".68"/>
+    <rect x="-305" y="-460" width="610" height="920" rx="39" fill="#1b1129" stroke="#915ac7" stroke-width="3"/>
+    <rect x="-283" y="-438" width="566" height="876" rx="26" fill="none" stroke="#aa76df" stroke-opacity=".4"/>
+    <path d="M-278-256-148-430H278V-219L151-53 278 36V228L107 420H-278V193L-153 76-278-25Z" fill="url(#grade)"/>
+    <path d="M0-328 211 0 0 328-211 0Z" fill="#221633" stroke="#6e429a" stroke-width="2"/>
+    <path d="M-232-32-181-192-43-83 1-158 54-77 186-201 233-35 151-87 61 1 0-42-64 3-150-85Z" fill="url(#faceta)" stroke="#b384e7" stroke-width="3"/>
+    <path d="M-181-192-150-85-43-83M0-158 0-42M186-201 151-87 54-77" fill="none" stroke="#d7aeff" stroke-opacity=".54" stroke-width="3"/>
+    <path d="M-179 38Q8 134 183 30L151 106 89 128 32 180-28 144-110 113Z" fill="url(#brilho)" stroke="#b5f66d" stroke-width="4"/>
+    <path d="M-132 74Q19 133 141 65L89 106-12 137-76 111Z" fill="#172918"/>
+    <path d="M-235-354-216-386-196-354-216-322ZM196 354 216 322 235 354 216 386Z" fill="#a3f15d"/>
+    <circle cx="0" cy="272" r="5" fill="#b8fa74"/>
+  </g>
+  <g font-family="DejaVu Sans, sans-serif">
+    <path d="M217 625H311" stroke="#b6fa6c" stroke-width="5"/>
+    <text x="217" y="682" fill="#b6fa6c" font-size="26" letter-spacing="7" font-weight="bold">NOITE EM NEON</text>
+    <text x="204" y="840" fill="#f3eaff" font-size="158" font-weight="bold" letter-spacing="-6">danas<tspan fill="#b7f878">OS</tspan></text>
+    <text x="220" y="905" fill="#c9abd9" font-size="24" letter-spacing="5">EDIÇÃO GAMING  /  XFCE</text>
+  </g>
+  <g fill="#b4f66b">
+    <circle cx="426" cy="1232" r="4"/><circle cx="1440" cy="1300" r="4"/><circle cx="2299" cy="916" r="4"/>
+  </g>
+</svg>

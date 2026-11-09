@@ -1,0 +1,84 @@
+#!/usr/bin/python3
+"""Configura um canal APT assinado de um projeto do GitHub Pages."""
+
+import argparse
+import os
+from pathlib import Path
+import re
+import subprocess
+import tempfile
+
+
+def validar_url(url):
+    url = url.rstrip("/")
+    formato = r"https://([a-z0-9][a-z0-9-]*\.github\.io)(?:/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*/apt"
+    resultado = re.fullmatch(formato, url)
+    if not resultado:
+        raise ValueError("Use uma URL HTTPS do GitHub Pages terminada em /apt.")
+    return url, resultado[1]
+
+
+def chave_publica(arquivo, fingerprint):
+    fingerprint = fingerprint.upper()
+    if not re.fullmatch(r"(?:[0-9A-F]{40}|[0-9A-F]{64})", fingerprint):
+        raise ValueError("Informe o fingerprint completo do mantenedor.")
+    dados = arquivo.read_bytes()
+    if not dados.startswith(b"-----BEGIN PGP PUBLIC KEY BLOCK-----"):
+        raise ValueError("Forneça somente a chave pública OpenPGP no formato .asc.")
+    with tempfile.TemporaryDirectory(prefix="danasos-chave-") as pasta:
+        metadados = subprocess.check_output(
+            ["gpg", "--homedir", pasta, "--batch", "--with-colons", "--show-keys", str(arquivo)],
+            text=True,
+        ).splitlines()
+    tipos = [linha.split(":")[0] for linha in metadados]
+    if tipos.count("pub") != 1 or "sec" in tipos:
+        raise ValueError("O arquivo deve conter uma única chave pública.")
+    fpr = next((linha.split(":")[9] for linha in metadados if linha.startswith("fpr:")), None)
+    if fpr != fingerprint:
+        raise ValueError("A chave pública não corresponde ao fingerprint informado.")
+    return dados
+
+
+def escrever(arquivo, dados):
+    arquivo.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=arquivo.parent, delete=False) as temporario:
+        nome = Path(temporario.name)
+        try:
+            temporario.write(dados)
+            temporario.close()
+            nome.chmod(0o644)
+            nome.replace(arquivo)
+        finally:
+            nome.unlink(missing_ok=True)
+
+
+def configurar(url, arquivo, fingerprint):
+    if os.geteuid() != 0 or os.freedesktop_os_release().get("ID") != "danasos":
+        raise RuntimeError("Execute com sudo no danasOS instalado.")
+    if "boot=live" in Path("/proc/cmdline").read_text().split():
+        raise RuntimeError("Inicie o danasOS pelo SSD antes de adicionar o canal.")
+    url, host = validar_url(url)
+    chave = chave_publica(arquivo, fingerprint)
+    keyring = Path("/etc/apt/keyrings/danasos-github.asc")
+    politica = (
+        f'Package: danasos-experience\nPin: origin "{host}"\nPin-Priority: 500\n\n'
+        f'Package: *\nPin: origin "{host}"\nPin-Priority: -1\n'
+    )
+    escrever(Path("/etc/apt/preferences.d/danasos-github"), politica.encode("ascii"))
+    escrever(keyring, chave)
+    escrever(Path("/etc/apt/sources.list.d/danasos-github.sources"), (
+        f"Types: deb\nURIs: {url}/\nSuites: ./\nSigned-By: {keyring}\n"
+    ).encode("ascii"))
+    print("Canal cadastrado. Abra Central danasOS → Atualizações e atualize a lista.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("url")
+    parser.add_argument("chave", type=Path)
+    parser.add_argument("fingerprint")
+    args = parser.parse_args()
+    try:
+        configurar(args.url, args.chave, args.fingerprint)
+    except (ValueError, RuntimeError, OSError, subprocess.CalledProcessError) as erro:
+        parser.exit(1, f"Canal não configurado. {erro}\n")

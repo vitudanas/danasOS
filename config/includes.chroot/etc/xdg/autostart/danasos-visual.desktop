@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Visual danasOS
+Exec=/usr/local/bin/danasos-visual
+OnlyShowIn=XFCE;
+NoDisplay=true

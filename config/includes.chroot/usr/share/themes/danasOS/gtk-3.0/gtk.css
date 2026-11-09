@@ -1,0 +1,19 @@
+@import url("resource:///org/gtk/libgtk/theme/Adwaita/gtk-contained-dark.css");
+
+@define-color theme_bg_color #1b1326;
+@define-color theme_fg_color #f2e8fc;
+@define-color theme_base_color #140f1d;
+@define-color theme_text_color #f2e8fc;
+@define-color theme_selected_bg_color #613e81;
+@define-color theme_selected_fg_color #ffffff;
+
+window, dialog, .background { background-color: #1b1326; color: #f2e8fc; }
+headerbar, .titlebar { background-image: none; background-color: #2a193a; }
+menu, .menu, popover { background-color: #21162d; }
+menuitem:hover { background-color: #613e81; color: #ffffff; }
+button.suggested-action { background-image: none; background-color: #b7f878; color: #13200a; }
+button.suggested-action:hover { background-color: #cfffa3; }
+entry:focus { border-color: #a5d960; box-shadow: inset 0 0 0 1px #a5d960; }
+.xfce4-panel.background { background-color: #1b1226; color: #f2e8fc; }
+.xfce4-panel button:checked { background-image: none; background-color: #42295a; color: #b7f878; }
+treeview.view:selected, textview text selection { background-color: #613e81; color: #ffffff; }

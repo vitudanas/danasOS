@@ -1,0 +1,61 @@
+name: Compilar ISO do danasOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: danasos-iso
+  cancel-in-progress: false
+
+jobs:
+  iso:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Compilar em Debian 13
+        run: |
+          set -eu
+          # Estes SDKs não são usados e ficam em uma VM descartável do Actions.
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          mkdir -p "$RUNNER_TEMP/danasos-build"
+          docker run --rm --privileged \
+            -v "$GITHUB_WORKSPACE:/src:ro" \
+            -v "$RUNNER_TEMP/danasos-build:/out" \
+            debian:13-slim sh -ec '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y python3 live-build xorriso squashfs-tools grub-efi-amd64-bin mtools dosfstools
+              PYTHONDONTWRITEBYTECODE=1 python3 /src/build.py --saida /out
+            '
+      - name: Preparar somente a ISO e o checksum
+        run: |
+          set -eu
+          origem="$RUNNER_TEMP/danasos-build"
+          destino="$RUNNER_TEMP/danasos-assets"
+          mkdir -p "$destino"
+          cd "$origem"
+          sha256sum -c danasOS-0.2-amd64.sha256
+          cp danasOS-0.2-amd64.sha256 "$destino/"
+          if [ "$(stat -c %s danasOS-0.2-amd64.iso)" -lt 2147483648 ]; then
+            mv danasOS-0.2-amd64.iso "$destino/"
+          else
+            split -b 1900M -d -a 3 danasOS-0.2-amd64.iso "$destino/danasOS-0.2-amd64.iso.part-"
+            cp "$GITHUB_WORKSPACE/juntar-iso.ps1" "$destino/"
+          fi
+      - name: Criar rascunho em Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          gh release create "iso-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" "$RUNNER_TEMP/danasos-assets/"* \
+            --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" \
+            --title "danasOS 0.2 — ISO para testes" \
+            --notes "Imagem gerada pelo workflow. Verifique o SHA-256 e teste o boot e a instalação em uma VM."
