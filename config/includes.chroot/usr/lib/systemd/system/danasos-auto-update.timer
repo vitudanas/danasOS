@@ -1,0 +1,11 @@
+[Unit]
+Description=Verificar diariamente atualizações assinadas do danasOS
+ConditionPathExists=/etc/danasos/auto-update
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

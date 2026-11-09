@@ -1,0 +1,13 @@
+[Unit]
+Description=Atualizar o pacote assinado do danasOS
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/danasos/auto-update
+ConditionPathExists=/etc/apt/sources.list.d/danasos-github.sources
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/danasos-auto-update executar
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=10min

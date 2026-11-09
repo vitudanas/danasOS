@@ -47,6 +47,7 @@ def preparar(diretorio):
         item.chmod(0o755)
     for item in config.glob("includes.chroot/usr/local/bin/*"):
         item.chmod(0o755)
+    (config / "includes.chroot/usr/bin/danasos-auto-update").chmod(0o755)
 
 
 def verificar_host():

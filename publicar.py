@@ -10,9 +10,13 @@ import subprocess
 import tempfile
 
 PACOTE = "danasos-experience"
-VERSAO_INICIAL = "0.2-1"
+VERSAO_INICIAL = "0.2-2"
 OVERLAY = Path(__file__).resolve().parent / "config/includes.chroot"
 CAMINHOS = (
+    "usr/bin/danasos-auto-update",
+    "usr/lib/systemd/system/danasos-auto-update.service",
+    "usr/lib/systemd/system/danasos-auto-update.timer",
+    "usr/lib/systemd/system-preset/00-danasos-auto-update.preset",
     "usr/share/danasos/catalogo.py",
     "usr/share/danasos/central.py",
     "usr/share/danasos/danasos.svg",
@@ -41,6 +45,8 @@ def criar_pacote(versao, saida):
             if origem.is_symlink():
                 raise ValueError(f"Arquivo simbólico fora do pacote: {caminho}")
             shutil.copyfile(origem, destino)
+            if caminho.startswith("usr/bin/"):
+                destino.chmod(0o755)
         metadados = raiz / "DEBIAN"
         metadados.mkdir()
         (metadados / "control").write_text(

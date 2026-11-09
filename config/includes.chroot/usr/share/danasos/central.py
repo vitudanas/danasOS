@@ -82,14 +82,17 @@ class Central(Gtk.Window):
         acoes.set_selection_mode(Gtk.SelectionMode.NONE)
         for titulo, argumentos in (
             ("Loja de aplicativos", ["gnome-software"]),
-            ("Atualizações", ["gnome-software", "--mode=updates"]),
+            ("Atualizações", None),
             ("Driver NVIDIA", ["xfce4-terminal", "--hold", "--execute", "sudo", "danasos-driver-nvidia"]),
             ("Diagnóstico", ["xfce4-terminal", "--hold", "--execute", "danasos-diagnostico"]),
             ("Configurações", ["xfce4-settings-manager"]),
         ):
             botao = Gtk.Button(label=titulo)
             botao.get_style_context().add_class("acao")
-            botao.connect("clicked", lambda _, cmd=argumentos: self.abrir(cmd))
+            if argumentos:
+                botao.connect("clicked", lambda _, cmd=argumentos: self.abrir(cmd))
+            else:
+                botao.connect("clicked", self.atualizacoes)
             acoes.add(botao)
         conteudo.pack_start(acoes, False, False, 0)
 
@@ -143,6 +146,30 @@ class Central(Gtk.Window):
     def abrir_link(botao):
         webbrowser.open(botao.get_uri())
         return True
+
+    def atualizacoes(self, _):
+        ativo = Path("/etc/danasos/auto-update").is_file()
+        painel = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.NONE, text="Atualizações do danasOS",
+        )
+        estado = "Ativada" if ativo else "Desativada"
+        painel.format_secondary_text(
+            f"Atualização automática: {estado}.\n\n"
+            "Ao ativar, o danasOS instala versões assinadas da Central e do tema pelo canal cadastrado."
+        )
+        painel.add_button("Fechar", Gtk.ResponseType.CLOSE)
+        painel.add_button("Abrir loja", 1)
+        painel.add_button("Desativar automática" if ativo else "Ativar automática", 2)
+        resposta = painel.run()
+        painel.destroy()
+        if resposta == 1:
+            self.abrir(["gnome-software", "--mode=updates"])
+        elif resposta == 2:
+            self.abrir([
+                "xfce4-terminal", "--hold", "--execute", "sudo", "/usr/bin/danasos-auto-update",
+                "desativar" if ativo else "ativar",
+            ])
 
     def abrir(self, comando):
         try:

@@ -44,13 +44,15 @@ O construtor usa um diretório separado por execução. Se um dos launchers falh
 
 ## Atualizações pela loja e pelo GitHub
 
-Na **Central danasOS → Atualizações**, a loja mostra atualizações do Debian e do Flathub. O pacote `danasos-experience`, instalado durante a construção da ISO, permite distribuir novas versões da Central e do tema pelo mesmo fluxo.
+Na **Central danasOS → Atualizações → Abrir loja**, a loja mostra atualizações do Debian e do Flathub. O pacote `danasos-experience`, instalado durante a construção da ISO, permite distribuir novas versões da Central e do tema pelo mesmo fluxo.
+
+A instalação automática vem desligada. Depois de cadastrar o canal assinado, selecione **Central danasOS → Atualizações → Ativar automática** e autorize com a senha do sistema. O agendador verifica o canal diariamente, instala somente versões mais novas de `danasos-experience` e registra o resultado em `journalctl -u danasos-auto-update.service`. A instalação usa índices separados dos repositórios do sistema e exige a assinatura da chave cadastrada. A opção **Desativar automática** cancela as próximas verificações.
 
 ### Lançar uma versão
 
 1. Coloque o projeto num repositório GitHub e em **Settings → Pages → Source** escolha **GitHub Actions**. Use um repositório que permita publicar no Pages.
 2. Use uma chave OpenPGP exclusiva para o projeto. Guarde a chave privada e sua cópia de segurança protegida fora da pasta do repositório. A variável de Actions **DANASOS_APT_FINGERPRINT** recebe somente o fingerprint público. Restrinja o ambiente `github-pages` à branch principal e mantenha o Push Protection ligado.
-3. Em um Linux com `apt-utils`, `dpkg` e `gnupg`, assine a versão com `python3 publicar.py --versao 0.2-2 --saida pasta-temporaria/apt --fingerprint FINGERPRINT_COMPLETO`. Use uma versão maior que a instalada. A assinatura acontece no Linux onde está sua chave.
+3. Em um Linux com `apt-utils`, `dpkg` e `gnupg`, assine a versão com `python3 publicar.py --versao 0.2-3 --saida pasta-temporaria/apt --fingerprint FINGERPRINT_COMPLETO`. Use uma versão maior que a instalada. A assinatura acontece no Linux onde está sua chave.
 4. Copie somente os arquivos gerados para `publicacao/apt/` e exporte a **chave pública** com `gpg --armor --export FINGERPRINT_COMPLETO > publicacao/danasos-publica.asc`. Depois de enviar esses arquivos, abra **Actions → Publicar atualização do danasOS → Run workflow**. O workflow verifica a assinatura, o conteúdo do pacote e os hashes antes de publicar. A URL do Pages aparece no resultado.
 
 ### Conectar uma instalação ao canal

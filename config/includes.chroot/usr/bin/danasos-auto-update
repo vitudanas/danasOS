@@ -1,0 +1,118 @@
+#!/usr/bin/python3
+"""Controla as atualizações automáticas do pacote assinado do danasOS."""
+
+import argparse
+import os
+from pathlib import Path
+import subprocess
+from urllib.parse import urlsplit
+
+PACOTE = "danasos-experience"
+FONTE = Path("/etc/apt/sources.list.d/danasos-github.sources")
+CHAVE = Path("/etc/apt/keyrings/danasos-github.asc")
+MARCADOR = Path("/etc/danasos/auto-update")
+INDICES = Path("/var/lib/danasos-auto-update/lists")
+TIMER = "danasos-auto-update.timer"
+AMBIENTE = {**os.environ, "LC_ALL": "C", "DEBIAN_FRONTEND": "noninteractive"}
+
+
+def rodar(*args):
+    subprocess.run(args, check=True, env=AMBIENTE)
+
+
+def ler(*args):
+    return subprocess.check_output(args, text=True, env=AMBIENTE)
+
+
+def conferir_canal():
+    if not FONTE.is_file() or not CHAVE.is_file():
+        raise ValueError("Cadastre primeiro o canal assinado com danasos-canal-github.")
+    linhas = FONTE.read_text(encoding="ascii").splitlines()
+    campos = dict(linha.split(": ", 1) for linha in linhas)
+    uri = campos.pop("URIs", "")
+    endereco = urlsplit(uri)
+    if (len(linhas) != 4 or campos != {"Types": "deb", "Suites": "./", "Signed-By": str(CHAVE)}
+            or endereco.scheme != "https" or not endereco.hostname
+            or not endereco.hostname.endswith(".github.io") or endereco.netloc != endereco.hostname
+            or not endereco.path.endswith("/apt/") or endereco.query or endereco.fragment
+            or any(caractere.isspace() for caractere in uri)):
+        raise ValueError("O canal APT não corresponde à configuração assinada do danasOS.")
+
+
+def opcoes_apt():
+    configuracoes = (
+        f"Dir::Etc::sourcelist={FONTE}", "Dir::Etc::sourceparts=-",
+        f"Dir::State::lists={INDICES}", "Dir::Cache::pkgcache=", "Dir::Cache::srcpkgcache=",
+        "Acquire::AllowInsecureRepositories=false", "Acquire::AllowDowngradeToInsecureRepositories=false",
+        "APT::Get::AllowUnauthenticated=false", "Acquire::Retries=1", "DPkg::Lock::Timeout=60",
+    )
+    return tuple(arg for valor in configuracoes for arg in ("-o", valor))
+
+
+def atualizar():
+    if not MARCADOR.is_file():
+        return
+    conferir_canal()
+    atual = ler("dpkg-query", "-W", "-f=${db:Status-Status}\n${Version}\n", PACOTE).splitlines()
+    if len(atual) != 2 or atual[0] != "installed":
+        raise ValueError("O pacote do danasOS precisa estar instalado e configurado.")
+    INDICES.mkdir(parents=True, exist_ok=True)
+    opcoes = opcoes_apt()
+    rodar("apt-get", *opcoes, "-o", "APT::Update::Error-Mode=any", "update")
+    politica = ler("apt-cache", *opcoes, "policy", PACOTE)
+    nova = next((linha.split(":", 1)[1].strip() for linha in politica.splitlines()
+                 if linha.strip().startswith("Candidate:")), "")
+    if not nova or nova == "(none)" or nova == atual[1]:
+        return
+    maior = subprocess.run(("dpkg", "--compare-versions", nova, "gt", atual[1]), env=AMBIENTE)
+    if maior.returncode == 1:
+        return
+    maior.check_returncode()
+    instalar = ("--only-upgrade", "--no-remove", "--no-install-recommends",
+                "install", f"{PACOTE}={nova}")
+    simulacao = ler("apt-get", *opcoes, "--simulate", *instalar)
+    atualizacao_prevista = False
+    for linha in simulacao.splitlines():
+        partes = linha.split()
+        if partes and partes[0] in {"Inst", "Conf", "Remv", "Purg"}:
+            if len(partes) < 2 or partes[0] not in {"Inst", "Conf"} or partes[1] != PACOTE:
+                raise ValueError("A atualização exigiria alterações em outro pacote.")
+            if partes[0] == "Inst":
+                atualizacao_prevista = True
+    if not atualizacao_prevista:
+        raise ValueError("O APT não confirmou a atualização na simulação.")
+    rodar("apt-get", *opcoes, "-y", *instalar)
+
+
+def ativar():
+    conferir_canal()
+    rodar("systemctl", "daemon-reload")
+    MARCADOR.parent.mkdir(parents=True, exist_ok=True)
+    novo = not MARCADOR.exists()
+    MARCADOR.touch()
+    try:
+        rodar("systemctl", "enable", "--now", TIMER)
+    except subprocess.CalledProcessError:
+        if novo:
+            MARCADOR.unlink(missing_ok=True)
+        raise
+    print("Atualização automática ativada.")
+
+
+def desativar():
+    MARCADOR.unlink(missing_ok=True)
+    rodar("systemctl", "disable", "--now", TIMER)
+    print("Atualização automática desativada.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    acoes = {"ativar": ativar, "desativar": desativar, "executar": atualizar}
+    parser.add_argument("acao", choices=acoes)
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        parser.exit(1, "Execute com sudo.\n")
+    try:
+        acoes[args.acao]()
+    except (OSError, ValueError, subprocess.CalledProcessError) as erro:
+        parser.exit(1, f"Atualização automática: {erro}\n")
