@@ -2,6 +2,9 @@ name: Compilar ISO do danasOS
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compilar-iso.yml']
 
 permissions:
   contents: read
