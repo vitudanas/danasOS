@@ -1,0 +1,15 @@
+[Unit]
+Description=Verifica a sessão live do danasOS na máquina virtual
+ConditionVirtualization=qemu
+ConditionPathExists=/dev/ttyS0
+After=display-manager.service
+Wants=display-manager.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=270
+StandardOutput=tty
+StandardError=inherit
+TTYPath=/dev/ttyS0
+Environment=LC_ALL=C
+ExecStart=/bin/sh -ec 'while ! pgrep -x xfce4-session >/dev/null; do sleep 2; done; uname -r; mokutil --sb-state; findmnt -n -o SOURCE,FSTYPE /run/live/medium; echo DANASOS_XFCE_PRONTO'

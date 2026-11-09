@@ -1,0 +1,56 @@
+name: Compilar e validar ISO de teste VMD
+
+on:
+  push:
+    branches: [fix/acer-vmd-live]
+    paths:
+      - '.github/workflows/iso-teste-vmd.yml'
+      - 'build.py'
+      - 'config/**'
+      - 'scripts/baixar-kernel-vmd.sh'
+      - 'scripts/verificar-iso-vmd.sh'
+      - 'scripts/danasos-verificar-vm.service'
+
+permissions:
+  contents: read
+
+jobs:
+  iso:
+    if: github.repository == 'vitudanas/danasOS'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Compilar ISO Debian 13
+        run: |
+          set -eu
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          mkdir -p "$RUNNER_TEMP/danasos-build"
+          docker run --rm --privileged \
+            -e "SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$GITHUB_SHA")" \
+            -v "$GITHUB_WORKSPACE:/src:ro" \
+            -v "$RUNNER_TEMP/danasos-build:/out" \
+            debian:13-slim sh -ec '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y python3 curl ca-certificates live-build xorriso squashfs-tools grub-efi-amd64-bin mtools dosfstools initramfs-tools-core sbsigntool zstd
+              PYTHONDONTWRITEBYTECODE=1 python3 /src/build.py --teste-vmd --saida /out
+            '
+      - name: Validar boot em NVMe FAT32 com UEFI Secure Boot
+        run: |
+          set -eu
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf gdisk mtools xorriso
+          saida="$RUNNER_TEMP/danasos-build"
+          (cd "$saida" && sha256sum -c danasOS-0.2-amd64-teste-vmd.sha256)
+          bash scripts/verificar-iso-vmd.sh "$saida/danasOS-0.2-amd64-teste-vmd.iso"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: danasOS-teste-vmd
+          path: |
+            ${{ runner.temp }}/danasos-build/danasOS-0.2-amd64-teste-vmd.iso
+            ${{ runner.temp }}/danasos-build/danasOS-0.2-amd64-teste-vmd.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

@@ -5,24 +5,16 @@ set -eu
 test -f /.dockerenv
 saida=${1:?Informe a pasta de saída}
 abi=7.3.3+deb14-amd64
-versao=7.3.3-1
-repo=https://deb.debian.org/debian/pool/main/l
 receita=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 trabalho=$(mktemp -d)
 trap 'rm -rf -- "$trabalho"' EXIT
 test ! -e "/usr/lib/modules/$abi"
 mkdir -p "$saida"
 
-# SHA-256 do índice amd64 do Debian, autenticado pelo InRelease de sid.
-extrair() {
-    arquivo="$2-${abi}_${versao}_amd64.deb"
-    curl -fLsS --retry 3 "$repo/$1/$arquivo" -o "$trabalho/$arquivo"
-    printf '%s  %s\n' "$3" "$trabalho/$arquivo" | sha256sum -c -
-    dpkg-deb -x "$trabalho/$arquivo" /
-}
-extrair linux linux-base 8ea48e0c7aeb709c895c13699f09676de9a236183a17124572bc695d70b23cb1
-extrair linux linux-modules 40073c12c078013c2127fe43e8510c1fa6c73b15fe2411fa18dff72dd84fead3
-extrair linux-signed-amd64 linux-binary bf17f1f217b3af4195128febf01ca2fc0cdb0163bf4a7c64f6bf5d2d5362bb43
+sh "$receita/scripts/baixar-kernel-vmd.sh" "$trabalho"
+for arquivo in "$trabalho/"*.deb; do
+    dpkg-deb -x "$arquivo" /
+done
 
 kernel="/usr/lib/modules/$abi/vmlinuz"
 sbverify --list "$kernel"

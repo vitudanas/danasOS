@@ -15,6 +15,7 @@ from publicar import VERSAO_INICIAL, criar_pacote
 
 ORIGEM = Path(__file__).resolve().parent
 NOME = "danasOS-0.2-amd64"
+ABI_TESTE = "7.3.3+deb14-amd64"
 OPCOES = (
     "--ignore-system-defaults",
     "--mode", "debian",
@@ -50,6 +51,29 @@ def preparar(diretorio):
     for item in config.glob("includes.chroot/usr/local/bin/*"):
         item.chmod(0o755)
     (config / "includes.chroot/usr/bin/danasos-auto-update").chmod(0o755)
+
+
+def preparar_teste_vmd(trabalho):
+    config = trabalho / "config"
+    hardware = config / "package-lists/hardware.list.chroot"
+    hardware.write_text(hardware.read_text().replace("linux-headers-amd64\n", ""))
+    boot = config / "package-lists/boot.list.chroot"
+    with boot.open("a") as arquivo:
+        arquivo.write("initramfs-tools\n")
+    marcadores = config / "includes.chroot/etc/danasos"
+    marcadores.mkdir(parents=True, exist_ok=True)
+    (marcadores / "kernel-teste-vmd").write_text(ABI_TESTE + "\n", encoding="ascii")
+    (marcadores / "edicao-publica").touch()
+    systemd = config / "includes.chroot/etc/systemd/system"
+    habilitados = systemd / "graphical.target.wants"
+    habilitados.mkdir(parents=True, exist_ok=True)
+    unidade = "danasos-verificar-vm.service"
+    shutil.copyfile(ORIGEM / "scripts" / unidade, systemd / unidade)
+    (habilitados / unidade).symlink_to(f"../{unidade}")
+    subprocess.run(
+        ["sh", str(ORIGEM / "scripts/baixar-kernel-vmd.sh"),
+         str(config / "packages.chroot"), "--live"], check=True,
+    )
 
 
 def verificar_host():
@@ -107,11 +131,12 @@ def conferir_boot(trabalho, imagem):
     print(f"Boot UEFI inspecionado: {abi}, VMD e NVMe presentes no initramfs da ISO.", flush=True)
 
 
-def compilar(destino):
+def compilar(destino, teste_vmd=False):
     verificar_host()
     destino.mkdir(parents=True, exist_ok=True)
-    iso = destino / f"{NOME}.iso"
-    checksum = destino / f"{NOME}.sha256"
+    nome = f"{NOME}-teste-vmd" if teste_vmd else NOME
+    iso = destino / f"{nome}.iso"
+    checksum = destino / f"{nome}.sha256"
     if iso.exists() or checksum.exists():
         raise RuntimeError("Já há uma imagem ou checksum com esse nome. Escolha outra pasta.")
     if shutil.disk_usage(destino).free < 25 * 1024**3:
@@ -119,9 +144,15 @@ def compilar(destino):
 
     trabalho = Path(tempfile.mkdtemp(prefix="build-danasos-", dir=destino))
     print(f"Pasta da compilação: {trabalho}", flush=True)
-    subprocess.run(["lb", "config", *OPCOES], cwd=trabalho, check=True)
+    opcoes = list(OPCOES)
+    if teste_vmd:
+        opcoes[opcoes.index("--image-name") + 1] = nome
+        opcoes.extend(("--linux-flavours", ABI_TESTE))
+    subprocess.run(["lb", "config", *opcoes], cwd=trabalho, check=True)
     # O live-build cria os diretórios em branco. Sobrepõe somente a receita.
     preparar(trabalho)
+    if teste_vmd:
+        preparar_teste_vmd(trabalho)
     criar_pacote(VERSAO_INICIAL, trabalho / "config/packages.chroot")
     subprocess.run(["lb", "build"], cwd=trabalho, check=True)
 
@@ -142,8 +173,10 @@ def compilar(destino):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--saida", type=Path, default=ORIGEM / "dist")
+    parser.add_argument("--teste-vmd", action="store_true",
+                        help="gera uma ISO de teste com o kernel Debian 7.3.3 assinado")
     args = parser.parse_args()
     try:
-        compilar(args.saida.resolve())
+        compilar(args.saida.resolve(), teste_vmd=args.teste_vmd)
     except (OSError, RuntimeError, subprocess.CalledProcessError) as erro:
         parser.exit(1, f"Compilação interrompida. {erro}\n")

@@ -10,6 +10,18 @@ versao_instalada() {
     esac
 }
 
+if [ -f /etc/danasos/kernel-teste-vmd ]; then
+    abi=$(cat /etc/danasos/kernel-teste-vmd)
+    test "$abi" = "7.3.3+deb14-amd64"
+    for pacote in linux-base linux-binary linux-image linux-modules; do
+        test "$(versao_instalada "$pacote-$abi")" = "7.3.3-1"
+    done
+    test "$(versao_instalada linux-base)" = "4.17~bpo13+1"
+    cmp "/usr/lib/modules/$abi/vmlinuz" "/boot/vmlinuz-$abi"
+    printf 'Kernel Debian de teste verificado: %s (7.3.3-1)\n' "$abi"
+    exit 0
+fi
+
 imagem=$(versao_instalada linux-image-amd64)
 case "$imagem" in
     6.12.*) ;;
