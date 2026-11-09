@@ -41,10 +41,16 @@ jobs:
         run: |
           set -eu
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf gdisk mtools xorriso
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf gdisk mtools xorriso socat
           saida="$RUNNER_TEMP/danasos-build"
           (cd "$saida" && sha256sum -c danasOS-0.2-amd64-teste-vmd.sha256)
-          bash scripts/verificar-iso-vmd.sh "$saida/danasOS-0.2-amd64-teste-vmd.iso"
+          bash scripts/verificar-iso-vmd.sh "$saida/danasOS-0.2-amd64-teste-vmd.iso" "$RUNNER_TEMP/boot-vmd.ppm"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: tela-vm-vmd
+          path: ${{ runner.temp }}/boot-vmd.ppm
+          retention-days: 2
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: danasOS-teste-vmd

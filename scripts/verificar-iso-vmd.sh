@@ -2,11 +2,23 @@
 set -euo pipefail
 
 iso=${1:?Informe o caminho da ISO}
+captura=${2:?Informe o caminho para a captura em caso de falha}
 trabalho=$(mktemp -d)
 serial="$trabalho/serial.log"
+monitor="$trabalho/monitor"
 vm=
+comando_vm() {
+    printf '%s\n' "$1" | socat -T 1 - "UNIX-CONNECT:$monitor" >/dev/null
+}
 limpar() {
-    if [[ -n "$vm" ]]; then kill "$vm" 2>/dev/null || true; wait "$vm" || true; fi
+    local resultado=$?
+    if [[ -n "$vm" ]]; then
+        if [[ "$resultado" -ne 0 && -S "$monitor" ]]; then
+            comando_vm "screendump $captura" || true
+        fi
+        kill "$vm" 2>/dev/null || true
+        wait "$vm" || true
+    fi
     if [[ -f "$serial" ]]; then cat "$serial"; fi
     rm -rf -- "$trabalho"
 }
@@ -15,6 +27,7 @@ trap limpar EXIT
 # A mesma capacidade de 4 GiB da partição DANASLIVE, em um SSD NVMe virtual.
 extraido="$trabalho/iso"
 xorriso -osirrox on -indev "$iso" -extract / "$extraido"
+chmod -R u+rwX "$extraido"
 test -f "$extraido/EFI/boot/bootx64.efi"
 test -f "$extraido/live/filesystem.squashfs"
 if [[ -n "$(find "$extraido" \( -type l -o -type f -size +4294967295c \) -print -quit)" ]]; then
@@ -31,15 +44,16 @@ mcopy -i "$fat" -s "$extraido"/* ::/
 shopt -u dotglob
 
 cp /usr/share/OVMF/OVMF_VARS_4M.ms.fd "$trabalho/vars.fd"
+: > "$serial"
 qemu-system-x86_64 -machine q35,smm=on,accel=tcg -smp 4 -m 4096 \
     -global driver=cfi.pflash01,property=secure,value=on \
     -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd \
     -drive "if=pflash,format=raw,unit=1,file=$trabalho/vars.fd" \
-    -display none -serial "file:$serial" -monitor none -nic none -no-reboot \
+    -display none -serial "file:$serial" -monitor "unix:$monitor,server=on,wait=off" -nic none -no-reboot \
     -drive "id=danaslive,file=$disco,format=raw,if=none" \
     -device nvme,drive=danaslive,serial=danaslive,bootindex=1 &
 vm=$!
-for _ in $(seq 1 150); do
+for tentativa in $(seq 1 150); do
     if grep -q '^DANASOS_XFCE_PRONTO' "$serial"; then
         grep -F '7.3.3+deb14-amd64' "$serial"
         grep -F 'SecureBoot enabled' "$serial"
@@ -47,6 +61,10 @@ for _ in $(seq 1 150); do
         exit 0
     fi
     kill -0 "$vm"
+    # O menu padrão do live-build espera uma escolha. Simula Enter na opção Live.
+    if (( tentativa <= 20 && tentativa % 3 == 0 )) && [[ -S "$monitor" ]]; then
+        comando_vm "sendkey ret" || true
+    fi
     sleep 2
 done
 echo 'A sessão XFCE não confirmou o boot em NVMe/FAT32 com Secure Boot.' >&2
