@@ -1,0 +1,49 @@
+name: Transferir ISO de teste para preparo local
+
+on:
+  push:
+    branches: [transfer/iso-vmd-42697373247]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  partes:
+    if: github.repository == 'vitudanas/danasOS'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: danasOS-teste-vmd
+          github-token: ${{ github.token }}
+          run-id: 42697373247
+          path: original
+      - name: Conferir e dividir a ISO já validada
+        run: |
+          set -eu
+          cd original
+          printf '%s  %s\n' 6590ba244ac29641bcc5167d67aade998af2e9cd5339f154d144ea408139b587 danasOS-0.2-amd64-teste-vmd.iso | sha256sum -c -
+          split -b 450M -d -a 2 danasOS-0.2-amd64-teste-vmd.iso iso.part-
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iso-vmd-parte-00
+          path: original/iso.part-00
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iso-vmd-parte-01
+          path: original/iso.part-01
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iso-vmd-parte-02
+          path: original/iso.part-02
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
