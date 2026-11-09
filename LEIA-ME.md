@@ -31,7 +31,7 @@ Use uma VM **Debian 13 amd64**, de preferência instalada sem interface gráfica
 
 ```sh
 sudo apt-get update
-sudo apt-get install live-build xorriso squashfs-tools grub-efi-amd64-bin mtools dosfstools
+sudo apt-get install live-build xorriso squashfs-tools grub-efi-amd64-bin mtools dosfstools initramfs-tools-core sbsigntool zstd
 sudo python3 build.py
 ```
 
@@ -41,6 +41,14 @@ Resultado esperado em `dist/`:
 - `danasOS-0.2-amd64.sha256`
 
 O construtor usa um diretório separado por execução. Se um dos launchers falhar no download, a construção para para evitar publicar uma imagem incompleta. Se faltar espaço ou houver um erro de download, o log do terminal indica a etapa. A ISO é disponibilizada na pasta de saída somente quando a compilação, a inspeção do catálogo UEFI e o cálculo do SHA-256 terminarem.
+
+### Kernel e Intel VMD no Acer Predator PHN16-73
+
+O kernel 6.12.116-1 aborta a inicialização do controlador quando o firmware informa `BUS_RESTRICT_CFG=3`. O NVMe atrás do VMD fica invisível. Quando `DANASLIVE` está nesse disco, o live-boot também perde acesso à mídia. A [correção upstream para Arrow Lake-HX](https://github.com/torvalds/linux/commit/72b32eccbcd591b9606edacf3bd7c455176d7660) trata esse modo. Ela consta na [revisão do Linux 6.12.117](https://lkml.iu.edu/hypermail/linux/kernel/2611.0/21478.html).
+
+Compile este commit em Debian 13 amd64 usando os repositórios oficiais do Debian. A receita exige um kernel assinado da série 6.12 a partir do 6.12.117 e os headers da mesma versão. Se o Debian ainda oferecer o 6.12.116-1, o build encerra antes de baixar os launchers. Confirme o backport no pacote publicado pelo Debian antes de promover a imagem. A validação extrai o kernel e o initramfs da ISO, inspeciona a presença de assinatura no kernel e exige VMD, NVMe e NVMe Core para a mesma ABI.
+
+O GitHub Actions usa a data do commit como `SOURCE_DATE_EPOCH`. Para repetir esse ajuste em um clone local, execute `sudo SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" python3 build.py`. Guarde o commit da receita, o log com a versão do kernel, a lista de pacotes em `/live/filesystem.packages` da ISO e o SHA-256. Os repositórios Debian e Flathub recebem atualizações, então rebuilds em datas diferentes podem gerar imagens diferentes.
 
 ## Atualizações pela loja e pelo GitHub
 
@@ -70,7 +78,7 @@ Abra **Central danasOS → Atualizações** e atualize a lista. O canal APT acei
 1. Confira o hash com `sha256sum -c danasOS-0.2-amd64.sha256`. Crie outra VM com disco virtual em branco, firmware UEFI e Secure Boot com as chaves padrão do firmware.
 2. Dê boot pela ISO. Abra a Central, a loja e os launchers. Confira `flatpak list --app` e o menu do Xfce. Teste o instalador no **disco virtual**, retire a ISO e reinicie.
 3. No sistema instalado, confira a identidade com `cat /etc/os-release`, a GPU com `vulkaninfo --summary` e o Secure Boot com `mokutil --sb-state`. Saia da conta e faça login de novo para verificar que os launchers ficaram fechados.
-4. No Acer, primeiro teste a sessão live pelo pendrive. Confira tela e taxa de atualização, touchpad, Wi‑Fi, Bluetooth, áudio e se o SSD aparece. O teste do driver NVIDIA e a comparação de RAM e FPS com o Mint devem ser feitos depois do boot pelo SSD.
+4. No Acer, inicie em modo live pelo pendrive com a configuração atual do VMD/RST e do Secure Boot. Na sessão live, rode `uname -r`, `lspci -nnk -s 00:0e.0`, `lsblk -o NAME,TYPE,SIZE,FSTYPE`, `mokutil --sb-state` e `sudo dmesg | grep -Ei 'vmd|nvme|timeout'`. Confirme que o VMD está vinculado ao driver, o NVMe e as partições aparecem, e o log está livre do erro de offset e de timeouts NVMe. Se o teste pelo pendrive passar, confira também o boot pelo `DANASLIVE` existente e reinicie pelo Windows Boot Manager. Faça estes testes na sessão live, com o instalador fechado. A correção de interrupções [ARL004](https://lkml.iu.edu/2610.2/14881.html) é separada. Timeouts com o NVMe já visível exigem investigação antes de liberar a imagem.
 
 ## Dual boot com o Windows
 

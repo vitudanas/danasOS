@@ -5,6 +5,7 @@ import argparse
 import hashlib
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -22,6 +23,7 @@ OPCOES = (
     "--binary-image", "iso-hybrid",
     "--bootloaders", "grub-efi",
     "--uefi-secure-boot", "enable",
+    "--apt-secure", "true",
     "--archive-areas", "main contrib non-free non-free-firmware",
     "--apt-recommends", "false",
     "--apt-source-archives", "false",
@@ -62,10 +64,47 @@ def verificar_host():
         raise RuntimeError("Execute o construtor com sudo dentro da VM Debian.")
     if subprocess.check_output(["dpkg", "--print-architecture"], text=True).strip() != "amd64":
         raise RuntimeError("A imagem precisa de um ambiente amd64.")
-    ausentes = [p for p in ("lb", "debootstrap", "xorriso", "mksquashfs", "dpkg-deb")
+    ausentes = [p for p in ("lb", "debootstrap", "xorriso", "mksquashfs", "dpkg-deb",
+                            "lsinitramfs", "sbverify")
                 if not shutil.which(p)]
     if ausentes:
         raise RuntimeError("Ferramentas ausentes: " + ", ".join(ausentes))
+
+
+def conferir_boot(trabalho, imagem):
+    boot = subprocess.check_output(
+        ["xorriso", "-indev", str(imagem), "-report_el_torito", "plain"], text=True,
+    )
+    if "UEFI" not in boot:
+        raise RuntimeError("O catálogo de boot da imagem não contém uma entrada UEFI.")
+
+    kernels = list((trabalho / "chroot/boot").glob("vmlinuz-*"))
+    if len(kernels) != 1:
+        raise RuntimeError("Esperava um único kernel para o boot da ISO.")
+    kernel = kernels[0].name
+    abi = kernel.removeprefix("vmlinuz-")
+    initrd = f"initrd.img-{abi}"
+    with tempfile.TemporaryDirectory(prefix="verificar-boot-", dir=trabalho) as pasta:
+        subprocess.run(
+            ["xorriso", "-osirrox", "on", "-indev", str(imagem),
+             "-extract", f"/live/{kernel}", str(Path(pasta) / kernel),
+             "-extract", f"/live/{initrd}", str(Path(pasta) / initrd)], check=True,
+        )
+        subprocess.run(["sbverify", "--list", str(Path(pasta) / kernel)], check=True)
+        conteudo = subprocess.check_output(["lsinitramfs", str(Path(pasta) / initrd)], text=True)
+
+    modulos = set()
+    for linha in conteudo.splitlines():
+        modulo = re.fullmatch(
+            rf"(?:usr/)?lib/modules/{re.escape(abi)}/kernel/.*/([^/]+)\.ko(?:\.(?:xz|zst|gz))?",
+            linha,
+        )
+        if modulo:
+            modulos.add(modulo[1])
+    faltam = {"vmd", "nvme", "nvme-core"} - modulos
+    if faltam:
+        raise RuntimeError("Módulos ausentes no initramfs da ISO: " + ", ".join(sorted(faltam)))
+    print(f"Boot UEFI inspecionado: {abi}, VMD e NVMe presentes no initramfs da ISO.", flush=True)
 
 
 def compilar(destino):
@@ -90,12 +129,7 @@ def compilar(destino):
     if len(imagens) != 1:
         raise RuntimeError(f"Esperava uma ISO, encontrei {len(imagens)}.")
     imagem = imagens[0]
-    boot = subprocess.check_output(
-        ["xorriso", "-indev", str(imagem), "-report_el_torito", "plain"],
-        text=True,
-    )
-    if "UEFI" not in boot:
-        raise RuntimeError("O catálogo de boot da imagem não contém uma entrada UEFI.")
+    conferir_boot(trabalho, imagem)
     with imagem.open("rb") as arquivo:
         sha = hashlib.file_digest(arquivo, "sha256").hexdigest()
     imagem.chmod(0o644)

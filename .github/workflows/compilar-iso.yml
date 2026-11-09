@@ -34,12 +34,14 @@ jobs:
           # Estes SDKs não são usados e ficam em uma VM descartável do Actions.
           sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet /opt/ghc
           mkdir -p "$RUNNER_TEMP/danasos-build"
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$GITHUB_SHA")"
           docker run --rm --privileged \
+            -e "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" \
             -v "$GITHUB_WORKSPACE:/src:ro" \
             -v "$RUNNER_TEMP/danasos-build:/out" \
             debian:13-slim sh -ec '
               apt-get update
-              DEBIAN_FRONTEND=noninteractive apt-get install -y python3 live-build xorriso squashfs-tools grub-efi-amd64-bin mtools dosfstools
+              DEBIAN_FRONTEND=noninteractive apt-get install -y python3 live-build xorriso squashfs-tools grub-efi-amd64-bin mtools dosfstools initramfs-tools-core sbsigntool zstd
               PYTHONDONTWRITEBYTECODE=1 python3 /src/build.py --saida /out
             '
       - name: Preparar somente a ISO e o checksum

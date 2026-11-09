@@ -1,0 +1,35 @@
+#!/bin/sh
+# Roda antes do download dos launchers. Mantém o kernel e os headers da suíte estável.
+set -eu
+
+versao_instalada() {
+    estado=$(dpkg-query -W -f='${db:Status-Status} ${Version}' "$1") || return 1
+    case "$estado" in
+        "installed "*) printf '%s\n' "${estado#installed }" ;;
+        *) return 1 ;;
+    esac
+}
+
+imagem=$(versao_instalada linux-image-amd64)
+case "$imagem" in
+    6.12.*) ;;
+    *) echo "Esperava um kernel Debian 6.12.y; instalado: $imagem." >&2; exit 1 ;;
+esac
+# Primeiro 6.12.y com o backport de 72b32eccbcd59 (Arrow Lake-HX).
+if ! dpkg --compare-versions "$imagem" ge 6.12.117; then
+    echo "Kernel Debian $imagem sem a correção VMD. Aguarde o pacote assinado 6.12.117 ou posterior da série 6.12." >&2
+    exit 1
+fi
+
+set -- /boot/vmlinuz-*
+if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+    echo "Esperava um único kernel em /boot." >&2
+    exit 1
+fi
+abi=${1#/boot/vmlinuz-}
+if [ "$(versao_instalada "linux-image-$abi")" != "$imagem" ] ||
+   [ "$(versao_instalada "linux-headers-$abi")" != "$imagem" ]; then
+    echo "Kernel assinado e headers devem corresponder a $abi ($imagem)." >&2
+    exit 1
+fi
+printf 'Kernel Debian verificado: %s (%s)\n' "$abi" "$imagem"

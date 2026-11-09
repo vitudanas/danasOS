@@ -1,0 +1,36 @@
+name: Verificar receita de boot
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/verificar-boot.yml'
+      - 'build.py'
+      - 'config/**'
+      - 'tests/**'
+
+permissions:
+  contents: read
+
+jobs:
+  receita:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Conferir sintaxe e rejeitar o kernel sem o patch
+        run: |
+          set -eu
+          hook=config/hooks/live/010-kernel-vmd.hook.chroot
+          sh -n "$hook"
+          mkdir "$RUNNER_TEMP/mock-dpkg"
+          printf '#!/bin/sh\nprintf "installed 6.12.116-1\\n"\n' > "$RUNNER_TEMP/mock-dpkg/dpkg-query"
+          chmod +x "$RUNNER_TEMP/mock-dpkg/dpkg-query"
+          if PATH="$RUNNER_TEMP/mock-dpkg:$PATH" sh "$hook" > "$RUNNER_TEMP/kernel.log" 2>&1; then
+            echo "O build aceitou o kernel antigo" >&2
+            exit 1
+          fi
+          grep -F 'Kernel Debian 6.12.116-1 sem a correção VMD' "$RUNNER_TEMP/kernel.log"
+      - name: Testar validação do kernel e initramfs
+        run: python3 -m unittest discover -s tests -v
