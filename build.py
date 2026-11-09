@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 import sys
@@ -53,7 +54,7 @@ def verificar_host():
         raise RuntimeError("Compile em uma VM Debian 13 amd64, com acesso à rede.")
     import os
 
-    versao = os.freedesktop_os_release()
+    versao = platform.freedesktop_os_release()
     if versao["ID"] != "debian" or versao.get("VERSION_CODENAME") != "trixie":
         raise RuntimeError("Use Debian 13 como ambiente de compilação.")
     if os.geteuid() != 0:

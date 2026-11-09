@@ -4,6 +4,7 @@
 import argparse
 import os
 from pathlib import Path
+import platform
 import re
 import subprocess
 import tempfile
@@ -53,7 +54,7 @@ def escrever(arquivo, dados):
 
 
 def configurar(url, arquivo, fingerprint):
-    if os.geteuid() != 0 or os.freedesktop_os_release().get("ID") != "danasos":
+    if os.geteuid() != 0 or platform.freedesktop_os_release().get("ID") != "danasos":
         raise RuntimeError("Execute com sudo no danasOS instalado.")
     if "boot=live" in Path("/proc/cmdline").read_text().split():
         raise RuntimeError("Inicie o danasOS pelo SSD antes de adicionar o canal.")

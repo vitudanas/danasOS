@@ -19,7 +19,7 @@ def rodar(*args):
 def instalar():
     if os.geteuid() != 0:
         raise RuntimeError("Execute sudo danasos-driver-nvidia após instalar no SSD.")
-    if os.freedesktop_os_release().get("ID") != "danasos":
+    if platform.freedesktop_os_release().get("ID") != "danasos":
         raise RuntimeError("Utilitário exclusivo do danasOS.")
     if "boot=live" in Path("/proc/cmdline").read_text().split():
         raise RuntimeError("Inicie pelo SSD antes de instalar o driver.")

@@ -4,7 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/compilar-iso.yml']
+    paths:
+      - '.github/workflows/compilar-iso.yml'
+      - 'build.py'
+      - 'publicar.py'
+      - 'config/**'
 
 permissions:
   contents: read
