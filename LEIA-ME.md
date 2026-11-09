@@ -42,6 +42,8 @@ Resultado esperado em `dist/`:
 
 O construtor usa um diretório separado por execução. Se um dos launchers falhar no download, a construção para para evitar publicar uma imagem incompleta. Se faltar espaço ou houver um erro de download, o log do terminal indica a etapa. A ISO é disponibilizada na pasta de saída somente quando a compilação, a inspeção do catálogo UEFI e o cálculo do SHA-256 terminarem.
 
+Para gerar a edição de distribuição pública, use `sudo python3 build.py --publica`. Essa edição inclui os arquivos de fontes Debian e da configuração live e oferece a instalação dos launchers pela Central a partir do Flathub.
+
 ## Atualizações pela loja e pelo GitHub
 
 Na **Central danasOS → Atualizações → Abrir loja**, a loja mostra atualizações do Debian e do Flathub. O pacote `danasos-experience`, instalado durante a construção da ISO, permite distribuir novas versões da Central e do tema pelo mesmo fluxo.

@@ -99,6 +99,8 @@ def autostart():
 
 def instalar_apps():
     rodar("flatpak", "--system", "remote-add", "--if-not-exists", "flathub", FLATHUB)
+    if Path("/etc/danasos/edicao-publica").is_file():
+        return
     ids = [identificador for _, _, identificador in APLICATIVOS]
     rodar("flatpak", "--system", "install", "--noninteractive", "-y", "flathub", *ids)
     instalados = set(subprocess.check_output(

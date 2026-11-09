@@ -1,0 +1,89 @@
+name: Compilar e publicar a prévia do danasOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/0.2-preview]
+    paths:
+      - '.github/workflows/publicar-iso.yml'
+      - 'build.py'
+      - 'config/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: danasos-publico-02
+  cancel-in-progress: false
+
+jobs:
+  iso:
+    if: github.repository == 'vitudanas/danasOS' && github.ref == 'refs/heads/release/0.2-preview'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Compilar a edição pública e suas fontes
+        run: |
+          set -euo pipefail
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          mkdir -p "$RUNNER_TEMP/danasos-build"
+          docker run --rm --privileged \
+            -v "$GITHUB_WORKSPACE:/src:ro" \
+            -v "$RUNNER_TEMP/danasos-build:/out" \
+            debian:13-slim sh -ec '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y python3 live-build xorriso squashfs-tools grub-efi-amd64-bin mtools dosfstools
+              PYTHONDONTWRITEBYTECODE=1 python3 /src/build.py --publica --saida /out
+            '
+      - name: Verificar e preparar os arquivos do lançamento
+        run: |
+          set -euo pipefail
+          destino="$RUNNER_TEMP/danasos-assets"
+          mkdir -p "$destino"
+          cd "$RUNNER_TEMP/danasos-build"
+          nome=danasOS-0.2-amd64
+          sha256sum -c "$nome.sha256"
+          sha256sum "$nome-source.debian.tar" "$nome-source.live.tar" > "$destino/$nome-fontes.sha256"
+          cp "$nome.sha256" "$destino/"
+          for arquivo in "$nome.iso" "$nome-source.debian.tar" "$nome-source.live.tar"; do
+            if [ "$(stat -c %s "$arquivo")" -lt 2147483648 ]; then
+              mv "$arquivo" "$destino/"
+            else
+              split -b 1900M -d -a 3 "$arquivo" "$destino/$arquivo.part-"
+              rm -- "$arquivo"
+            fi
+          done
+          if compgen -G "$destino/$nome.iso.part-*" > /dev/null; then
+            cp "$GITHUB_WORKSPACE/juntar-iso.ps1" "$destino/"
+          fi
+      - name: Publicar a ISO e o código-fonte correspondente
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=v0.2-preview
+          release="$RUNNER_TEMP/danasos-release.json"
+          notas="$RUNNER_TEMP/danasos-notas.md"
+          cat > "$notas" <<'NOTAS'
+          Pré-lançamento do danasOS 0.2 para testes em PCs x86-64 com UEFI.
+
+          - Baixe a ISO e confira o SHA-256. Se a ISO estiver em partes, baixe todas, o checksum e o `juntar-iso.ps1` na mesma pasta.
+          - Teste em uma VM ou em modo live pelo pendrive antes de instalar ou alterar partições.
+          - Os launchers podem ser instalados pela Central ou pela loja a partir do Flathub.
+          - Os arquivos `source.debian.tar` e `source.live.tar` contêm as fontes da imagem. Se vierem em partes, junte na ordem numérica e confira `danasOS-0.2-amd64-fontes.sha256`. O código do projeto está na tag deste lançamento.
+          NOTAS
+          gh release create "$tag" "$RUNNER_TEMP/danasos-assets/"* \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease \
+            --title "danasOS 0.2 — prévia pública" --notes-file "$notas"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$release"
+          id="$(jq -er --arg tag "$tag" --arg alvo "$GITHUB_SHA" '
+            map(select(.draft and .prerelease and .tag_name == $tag and .target_commitish == $alvo)) |
+            if length == 1 then .[0].id else error("Rascunho esperado não encontrado") end
+          ' "$release")"
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F draft=false |
+            jq -er 'select(.draft == false and .prerelease == true) | .html_url'

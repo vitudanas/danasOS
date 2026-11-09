@@ -5,6 +5,7 @@ import argparse
 import hashlib
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -68,7 +69,31 @@ def verificar_host():
         raise RuntimeError("Ferramentas ausentes: " + ", ".join(ausentes))
 
 
-def compilar(destino):
+def conferir_fontes(trabalho):
+    consulta = subprocess.check_output(
+        ["dpkg-query", f"--admindir={trabalho / 'chroot/var/lib/dpkg'}", "-W",
+         "-f=${db:Status-Status}\t${source:Package}\t${source:Version}\n"],
+        text=True,
+    )
+    exigidos = set()
+    for linha in consulta.splitlines():
+        estado, pacote, versao = linha.split("\t")
+        if estado == "installed" and pacote != "danasos-experience":
+            exigidos.add((pacote, versao))
+    encontrados = set()
+    for arquivo in (trabalho / "source/debian").rglob("*.dsc"):
+        texto = arquivo.read_text(encoding="utf-8", errors="replace")
+        nome = re.search(r"(?m)^Source: (\S+)$", texto)
+        versao = re.search(r"(?m)^Version: (\S+)$", texto)
+        if nome and versao:
+            encontrados.add((nome[1], versao[1]))
+    faltam = sorted(exigidos - encontrados)
+    if not exigidos or faltam:
+        raise RuntimeError("Fontes Debian incompletas: " + ", ".join(f"{n}={v}" for n, v in faltam))
+    print(f"Fontes verificadas para {len(exigidos)} pacotes-fonte Debian.")
+
+
+def compilar(destino, publica=False):
     verificar_host()
     destino.mkdir(parents=True, exist_ok=True)
     iso = destino / f"{NOME}.iso"
@@ -80,11 +105,26 @@ def compilar(destino):
 
     trabalho = Path(tempfile.mkdtemp(prefix="build-danasos-", dir=destino))
     print(f"Pasta da compilação: {trabalho}", flush=True)
-    subprocess.run(["lb", "config", *OPCOES], cwd=trabalho, check=True)
+    opcoes = list(OPCOES)
+    if publica:
+        opcoes[opcoes.index("--archive-areas") + 1] = "main non-free-firmware"
+        opcoes[opcoes.index("--apt-source-archives") + 1] = "true"
+        opcoes.extend(("--source", "true", "--source-images", "tar", "--compression", "none"))
+    subprocess.run(["lb", "config", *opcoes], cwd=trabalho, check=True)
     # O live-build cria os diretórios em branco. Sobrepõe somente a receita.
     preparar(trabalho)
+    if publica:
+        marcador = trabalho / "config/includes.chroot/etc/danasos/edicao-publica"
+        marcador.parent.mkdir(parents=True, exist_ok=True)
+        marcador.touch()
     criar_pacote(VERSAO_INICIAL, trabalho / "config/packages.chroot")
     subprocess.run(["lb", "build"], cwd=trabalho, check=True)
+    fontes = ()
+    if publica:
+        conferir_fontes(trabalho)
+        fontes = tuple(trabalho / f"{NOME}-source.{tipo}.tar" for tipo in ("debian", "live"))
+        if any(not p.is_file() or p.stat().st_size == 0 for p in fontes):
+            raise RuntimeError("Os dois arquivos de fontes são obrigatórios na edição pública.")
 
     imagens = list(trabalho.glob("*.iso"))
     if len(imagens) != 1:
@@ -101,6 +141,9 @@ def compilar(destino):
     imagem.chmod(0o644)
     imagem.rename(iso)
     checksum.write_text(f"{sha}  {iso.name}\n", encoding="ascii")
+    for fonte in fontes:
+        fonte.chmod(0o644)
+        fonte.rename(destino / fonte.name)
     print(f"Imagem: {iso}\nSHA-256: {sha}")
     print("Teste o boot e a instalação em disco virtual antes de usar num SSD.")
 
@@ -108,8 +151,9 @@ def compilar(destino):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--saida", type=Path, default=ORIGEM / "dist")
+    parser.add_argument("--publica", action="store_true", help="gera a ISO e os arquivos de fontes")
     args = parser.parse_args()
     try:
-        compilar(args.saida.resolve())
+        compilar(args.saida.resolve(), publica=args.publica)
     except (OSError, RuntimeError, subprocess.CalledProcessError) as erro:
         parser.exit(1, f"Compilação interrompida. {erro}\n")

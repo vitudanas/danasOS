@@ -103,16 +103,17 @@ class Central(Gtk.Window):
         grade.set_selection_mode(Gtk.SelectionMode.NONE)
         instalados = self.listar_flatpaks()
         for nome, descricao, flatpak in APLICATIVOS:
-            comando = ["flatpak", "run", flatpak]
             instalado = flatpak in instalados
+            comando = ["flatpak", "run", flatpak] if instalado else [
+                "xfce4-terminal", "--hold", "--execute", "flatpak", "install", "--system", "flathub", flatpak,
+            ]
             botao = Gtk.Button()
             botao.get_style_context().add_class("cartao")
             linhas = caixa(3)
             linhas.pack_start(rotulo(nome, "secao"), False, False, 0)
             linhas.pack_start(rotulo(descricao, "detalhe"), False, False, 0)
-            linhas.pack_start(rotulo("ABRIR" if instalado else "PENDENTE", "rodape"), False, False, 0)
+            linhas.pack_start(rotulo("ABRIR" if instalado else "INSTALAR", "rodape"), False, False, 0)
             botao.add(linhas)
-            botao.set_sensitive(instalado)
             botao.connect("clicked", lambda _, cmd=comando: self.abrir(cmd))
             grade.add(botao)
         conteudo.pack_start(grade, False, False, 0)
