@@ -4,6 +4,8 @@ A edição 0.3 usa o Linux Mint 22.3 Xfce HWE, baseado no Ubuntu 24.04. A imagem
 
 GameMode e Vulkan entram na imagem. A loja e a tela de boas-vindas ficam acessíveis pelo menu. As notificações de atualização do Mint continuam no desktop.
 
+No danasOS instalado, **Central danasOS → Atualizações → Ativar automática** habilita a verificação diária do pacote da Central e do tema. Primeiro, publique e cadastre o [canal assinado do projeto](#atualizações-pela-loja-e-pelo-github). As atualizações do sistema e do Flathub seguem pelos respectivos gerenciadores.
+
 No Ubuntu 24.04 amd64, com pelo menos 25 GiB livres no diretório temporário, execute:
 
 ```sh
