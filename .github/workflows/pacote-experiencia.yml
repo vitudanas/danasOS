@@ -1,0 +1,67 @@
+name: Validar e empacotar atualização danasOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, codex/danasos-auditoria]
+    paths:
+      - '.github/workflows/pacote-experiencia.yml'
+      - 'publicar.py'
+      - 'verificar-canal.py'
+      - 'config/**'
+      - 'tests/**'
+
+permissions:
+  contents: read
+
+jobs:
+  pacote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      - name: Validar arquivos e gerar pacote
+        run: |
+          set -eu
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends apt-utils desktop-file-utils shellcheck
+          python3 -m unittest discover -s tests -v
+          find config -name '*.desktop' -exec desktop-file-validate {} +
+          shellcheck -S error scripts/*.sh config/hooks/live/010-kernel-vmd.hook.chroot
+          python3 -m compileall -q config scripts publicar.py verificar-canal.py
+          python3 -c 'import publicar; from pathlib import Path; repo = Path("dist/apt").resolve(); publicar.criar_pacote(publicar.VERSAO_INICIAL, repo); publicar.criar_indices(repo)'
+          python3 -c 'import runpy; from pathlib import Path; verificar = runpy.run_path("verificar-canal.py"); verificar["verificar_pacote"](next(Path("dist/apt").glob("*.deb")))'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: danasos-experience-unsigned
+          path: dist/apt/
+          if-no-files-found: error
+  integracao:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Exercitar assinatura, APT e recuperação
+        run: |
+          set -eu
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends apt-utils gnupg python3-gi gir1.2-gtk-3.0 gnome-software flatpak xfce4-terminal pkexec xvfb xauth
+          sudo bash tests/atualizacao-apt.sh
+      - name: Abrir a Central e validar CSS em GTK3
+        run: |
+          cd config/includes.chroot/usr/share
+          xvfb-run -a env PYTHONPATH=danasos /usr/bin/python3 - <<'PY'
+          from central import Central, Gtk
+          app = Central()
+          app.show_all()
+          while Gtk.events_pending():
+              Gtk.main_iteration()
+          assert len(app.apps) == 6
+          tema = Gtk.CssProvider()
+          tema.load_from_path("themes/danasOS/gtk-3.0/gtk.css")
+          PY
