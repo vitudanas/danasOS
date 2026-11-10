@@ -44,14 +44,16 @@ mkdir -p "$raiz/etc/danasos" "$raiz/etc/X11/xorg.conf.d" "$raiz/etc/lightdm/ligh
 touch "$raiz/etc/danasos/base-mint"
 release="$raiz$(chroot "$raiz" realpath /etc/os-release)"
 sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="danasOS 0.3 (Linux Mint 22.3 Xfce)"/' "$release"
-for app in danasos-visual danasos-diagnostico danasos-canal-github; do
+for app in danasos-visual danasos-canal-github; do
     install -m 0755 "$overlay/usr/local/bin/$app" "$raiz/usr/local/bin/$app"
 done
 install -m 0644 "$overlay/etc/xdg/autostart/danasos-visual.desktop" "$raiz/etc/xdg/autostart/"
 install -m 0644 "$overlay/etc/lightdm/lightdm-gtk-greeter.conf.d/90-danasos.conf" \
     "$raiz/etc/lightdm/lightdm-gtk-greeter.conf.d/"
-python3 "$repo/publicar.py" --versao 0.2-2 --saida "$tmp"
-install -m 0644 "$tmp/danasos-experience_0.2-2_all.deb" "$raiz/tmp/"
+versao_experiencia=$(python3 -I -c 'import runpy, sys; print(runpy.run_path(sys.argv[1])["VERSAO_INICIAL"])' "$repo/publicar.py")
+pacote_experiencia="danasos-experience_${versao_experiencia}_all.deb"
+python3 "$repo/publicar.py" --versao "$versao_experiencia" --saida "$tmp"
+install -m 0644 "$tmp/$pacote_experiencia" "$raiz/tmp/"
 
 cat > "$raiz/etc/X11/xorg.conf.d/90-danasos-nvidia.conf" <<'XORG'
 Section "OutputClass"
@@ -147,7 +149,7 @@ timeout --kill-after=10s 3m chroot "$raiz" env DEBIAN_FRONTEND=noninteractive LC
     --download-only install -y --no-install-recommends "${pacotes[@]}"
 echo 'Instalando os pacotes já verificados'
 apt_mint --no-download -o Dpkg::Use-Pty=0 install -y --no-install-recommends "${pacotes[@]}"
-apt_mint install -y --no-install-recommends /tmp/danasos-experience_0.2-2_all.deb
+apt_mint install -y --no-install-recommends "/tmp/$pacote_experiencia"
 rm -- "$raiz/etc/apt/sources.list.d/danasos-kernel-teste.list" "$raiz/etc/apt/preferences.d/danasos-kernel-teste"
 test -s "$raiz/boot/vmlinuz-$abi"
 for modulo in nvidia nvidia_modeset nvidia_drm nvidia_uvm; do
@@ -196,7 +198,7 @@ mkdir -p "$raiz/etc/systemd/system/graphical.target.wants"
 ln -s ../danasos-verificar-vm.service "$raiz/etc/systemd/system/graphical.target.wants/"
 no_mint apt-get clean
 find "$raiz/var/lib/apt/lists" -maxdepth 1 -type f -delete
-rm -- "$raiz/tmp/danasos-experience_0.2-2_all.deb" "$raiz/usr/sbin/policy-rc.d" "$raiz/etc/resolv.conf"
+rm -- "$raiz/tmp/$pacote_experiencia" "$raiz/usr/sbin/policy-rc.d" "$raiz/etc/resolv.conf"
 mv "$tmp/resolv.conf" "$raiz/etc/resolv.conf"
 if test -e "$tmp/policy-rc.d"; then mv "$tmp/policy-rc.d" "$raiz/usr/sbin/policy-rc.d"; fi
 desmontar

@@ -3,7 +3,9 @@ Description=Atualizar o pacote assinado do danasOS
 Wants=network-online.target
 After=network-online.target
 ConditionPathExists=/etc/danasos/auto-update
-ConditionPathExists=/etc/apt/sources.list.d/danasos-github.sources
+ConditionPathExists=/usr/share/danasos/apt/oficial.sources
+ConditionKernelCommandLine=!boot=casper
+ConditionKernelCommandLine=!boot=live
 
 [Service]
 Type=oneshot

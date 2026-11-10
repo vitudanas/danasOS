@@ -1,0 +1,39 @@
+name: Verificar o bootstrap público do danasOS
+
+on:
+  push:
+    branches: [codex/teste-bootstrap, codex/danasos-auditoria]
+    paths:
+      - 'ATUALIZAR.md'
+      - 'tests/bootstrap-publico.sh'
+      - '.github/workflows/verificar-bootstrap.yml'
+  pull_request:
+    paths:
+      - 'ATUALIZAR.md'
+      - 'tests/bootstrap-publico.sh'
+      - '.github/workflows/verificar-bootstrap.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-noble:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preparar uma instalação equivalente à 0.2-2
+        run: |
+          set -eu
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends curl gpg gpgv pkexec
+          mkdir "$RUNNER_TEMP/baseline"
+          git archive 54ef0ea publicar.py config/includes.chroot | tar -x -C "$RUNNER_TEMP/baseline"
+          python3 "$RUNNER_TEMP/baseline/publicar.py" --versao 0.2-2 --saida "$RUNNER_TEMP/base"
+          sudo apt-get install -y --no-install-recommends "$RUNNER_TEMP/base/danasos-experience_0.2-2_all.deb"
+          dpkg-query -W gpg gpgv apt danasos-experience
+      - name: Executar o bloco literal e verificar a ordem de instalação
+        run: bash tests/bootstrap-publico.sh

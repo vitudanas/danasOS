@@ -2,6 +2,8 @@
 """Empacota a Central e o tema ou gera um canal APT assinado."""
 
 import argparse
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 import os
 from pathlib import Path
 import re
@@ -10,15 +12,20 @@ import subprocess
 import tempfile
 
 PACOTE = "danasos-experience"
-VERSAO_INICIAL = "0.2-2"
+VERSAO_INICIAL = "0.4-1"
 OVERLAY = Path(__file__).resolve().parent / "config/includes.chroot"
 CAMINHOS = (
     "usr/bin/danasos-auto-update",
+    "usr/bin/danasos-diagnostico",
     "usr/lib/systemd/system/danasos-auto-update.service",
     "usr/lib/systemd/system/danasos-auto-update.timer",
     "usr/lib/systemd/system-preset/00-danasos-auto-update.preset",
     "usr/share/danasos/catalogo.py",
     "usr/share/danasos/central.py",
+    "usr/share/danasos/configuracoes.py",
+    "usr/share/danasos/apt/oficial.sources",
+    "usr/share/danasos/apt/danasos-release.asc",
+    "usr/share/danasos/CHANGELOG.md",
     "usr/share/danasos/danasos.svg",
     "usr/share/danasos/noite-em-neon.png",
     "usr/share/danasos/noite-em-neon.svg",
@@ -52,12 +59,26 @@ def criar_pacote(versao, saida):
         (metadados / "control").write_text(
             f"Package: {PACOTE}\nVersion: {versao}\nArchitecture: all\n"
             "Section: x11\nPriority: optional\nMaintainer: danasOS Project <maintainers@danasos.invalid>\n"
-            "Depends: python3-gi, gir1.2-gtk-3.0, gnome-software, flatpak, xfce4-terminal\n"
+            "Depends: python3-gi, gir1.2-gtk-3.0, gnome-software, flatpak, xfce4-terminal, pkexec\n"
+            "X-DanasOS-Changes: Canal assinado, Central reorganizada, configurações e tamanho do texto.\n"
             "Description: danasOS desktop identity and gaming hub\n",
             encoding="utf-8",
         )
         subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(raiz), str(alvo)], check=True)
     return alvo
+
+
+def criar_indices(repositorio):
+    with (repositorio / "Packages").open("wb") as indices:
+        subprocess.run(["apt-ftparchive", "packages", "."], cwd=repositorio,
+                       stdout=indices, check=True)
+    release = subprocess.check_output(
+        ["apt-ftparchive", "-o", "APT::FTPArchive::Release::Origin=danasOS",
+         "-o", "APT::FTPArchive::Release::Label=danasOS", "release", "."],
+        cwd=repositorio,
+    )
+    validade = format_datetime(datetime.now(timezone.utc) + timedelta(days=90), usegmt=True)
+    (repositorio / "Release").write_bytes(f"Valid-Until: {validade}\n".encode("ascii") + release)
 
 
 def criar_canal(versao, saida, chave):
@@ -69,18 +90,7 @@ def criar_canal(versao, saida, chave):
     with tempfile.TemporaryDirectory(prefix="danasos-canal-", dir=saida.parent) as temp:
         repositorio = Path(temp) / "apt"
         criar_pacote(versao, repositorio)
-        with (repositorio / "Packages").open("wb") as indices:
-            subprocess.run(["apt-ftparchive", "packages", "."], cwd=repositorio,
-                           stdout=indices, check=True)
-        # Gere Release fora do repositório para o índice não incluir o próprio arquivo.
-        release = Path(temp) / "Release"
-        with release.open("wb") as conteudo:
-            subprocess.run(
-                ["apt-ftparchive", "-o", "APT::FTPArchive::Release::Origin=danasOS",
-                 "-o", "APT::FTPArchive::Release::Label=danasOS", "release", "."],
-                cwd=repositorio, stdout=conteudo, check=True,
-            )
-        shutil.move(release, repositorio / "Release")
+        criar_indices(repositorio)
         subprocess.run(
             ["gpg", "--batch", "--local-user", chave, "--output", "InRelease",
              "--clearsign", "Release"],

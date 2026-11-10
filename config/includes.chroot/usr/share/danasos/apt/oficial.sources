@@ -1,0 +1,4 @@
+Types: deb
+URIs: https://vitudanas.github.io/danasOS/apt/
+Suites: ./
+Signed-By: /usr/share/danasos/apt/danasos-release.asc 03F1100B22C6C9760977042E0FCEC1F004C97E6B
