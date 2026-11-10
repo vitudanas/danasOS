@@ -13,6 +13,7 @@
 .env
 .env.*
 *.asc
+!/config/includes.chroot/usr/share/danasos/apt/danasos-release.asc
 *.gpg
 *.kbx
 *.key

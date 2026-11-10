@@ -1,118 +1,242 @@
 #!/usr/bin/python3
-"""Controla as atualizações automáticas do pacote assinado do danasOS."""
+"""Gerencia somente o pacote de experiência do canal assinado do danasOS."""
 
 import argparse
+from datetime import datetime, timezone
+import fcntl
+import hashlib
+import json
 import os
 from pathlib import Path
+import re
 import subprocess
-from urllib.parse import urlsplit
+import tempfile
 
 PACOTE = "danasos-experience"
-FONTE = Path("/etc/apt/sources.list.d/danasos-github.sources")
-CHAVE = Path("/etc/apt/keyrings/danasos-github.asc")
+ARTE = Path("/usr/share/danasos")
+FONTE = ARTE / "apt/oficial.sources"
+CHAVE = ARTE / "apt/danasos-release.asc"
+CANAL = "https://vitudanas.github.io/danasOS/apt/"
+ESTADO = Path("/var/lib/danasos-auto-update")
+STATUS = ESTADO / "status.json"
+INDICES = ESTADO / "lists"
+CACHE = ESTADO / "pacotes"
 MARCADOR = Path("/etc/danasos/auto-update")
-INDICES = Path("/var/lib/danasos-auto-update/lists")
 TIMER = "danasos-auto-update.timer"
-AMBIENTE = {**os.environ, "LC_ALL": "C", "DEBIAN_FRONTEND": "noninteractive"}
+VERSAO = re.compile(r"\d+(?:\.\d+)+-\d+")
+AMBIENTE = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C",
+            "DEBIAN_FRONTEND": "noninteractive"}
 
 
-def rodar(*args):
-    subprocess.run(args, check=True, env=AMBIENTE)
+def rodar(*args, cwd=None):
+    return subprocess.run(args, check=True, env=AMBIENTE, cwd=cwd, text=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
 
 
-def ler(*args):
-    return subprocess.check_output(args, text=True, env=AMBIENTE)
+def agora():
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def conferir_canal():
-    if not FONTE.is_file() or not CHAVE.is_file():
-        raise ValueError("Cadastre primeiro o canal assinado com danasos-canal-github.")
-    linhas = FONTE.read_text(encoding="ascii").splitlines()
-    campos = dict(linha.split(": ", 1) for linha in linhas)
-    uri = campos.pop("URIs", "")
-    endereco = urlsplit(uri)
-    if (len(linhas) != 4 or campos != {"Types": "deb", "Suites": "./", "Signed-By": str(CHAVE)}
-            or endereco.scheme != "https" or not endereco.hostname
-            or not endereco.hostname.endswith(".github.io") or endereco.netloc != endereco.hostname
-            or not endereco.path.endswith("/apt/") or endereco.query or endereco.fragment
-            or any(caractere.isspace() for caractere in uri)):
-        raise ValueError("O canal APT não corresponde à configuração assinada do danasOS.")
+def ler_status():
+    return json.loads(STATUS.read_text()) if STATUS.is_file() else {}
 
 
-def opcoes_apt():
+def escrever_status(estado):
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=ESTADO, delete=False) as fluxo:
+        arquivo = Path(fluxo.name)
+        try:
+            json.dump(estado, fluxo, ensure_ascii=False)
+            fluxo.close()
+            arquivo.chmod(0o644)
+            arquivo.replace(STATUS)
+        finally:
+            arquivo.unlink(missing_ok=True)
+
+
+def apt(ferramenta, *args, cwd=None):
     configuracoes = (
         f"Dir::Etc::sourcelist={FONTE}", "Dir::Etc::sourceparts=-",
         f"Dir::State::lists={INDICES}", "Dir::Cache::pkgcache=", "Dir::Cache::srcpkgcache=",
-        "Acquire::AllowInsecureRepositories=false", "Acquire::AllowDowngradeToInsecureRepositories=false",
-        "APT::Get::AllowUnauthenticated=false", "Acquire::Retries=1", "DPkg::Lock::Timeout=60",
+        "Acquire::AllowInsecureRepositories=false", "Acquire::AllowWeakRepositories=false",
+        "Acquire::AllowDowngradeToInsecureRepositories=false", "APT::Get::AllowUnauthenticated=false",
+        "Acquire::Retries=1", "Acquire::https::Timeout=20", "DPkg::Lock::Timeout=60",
     )
-    return tuple(arg for valor in configuracoes for arg in ("-o", valor))
+    opcoes = tuple(arg for valor in configuracoes for arg in ("-o", valor))
+    return rodar(ferramenta, *opcoes, *args, cwd=cwd)
 
 
-def atualizar():
-    if not MARCADOR.is_file():
-        return
-    conferir_canal()
-    atual = ler("dpkg-query", "-W", "-f=${db:Status-Status}\n${Version}\n", PACOTE).splitlines()
-    if len(atual) != 2 or atual[0] != "installed":
-        raise ValueError("O pacote do danasOS precisa estar instalado e configurado.")
-    INDICES.mkdir(parents=True, exist_ok=True)
-    opcoes = opcoes_apt()
-    rodar("apt-get", *opcoes, "-o", "APT::Update::Error-Mode=any", "update")
-    politica = ler("apt-cache", *opcoes, "policy", PACOTE)
+def versao_atual():
+    versao = rodar("dpkg-query", "-W", "-f=${Version}", PACOTE).strip()
+    if not VERSAO.fullmatch(versao):
+        raise ValueError("A versão instalada do danasOS não foi reconhecida.")
+    return versao
+
+
+def metadados(versao):
+    registros = apt("apt-cache", "show", f"{PACOTE}={versao}").split("\n\n")
+    for registro in registros:
+        campos = dict(linha.split(": ", 1) for linha in registro.splitlines() if ": " in linha)
+        if (campos.get("Package") == PACOTE and campos.get("Version") == versao
+                and campos.get("Architecture") == "all"
+                and re.fullmatch(r"[a-f0-9]{64}", campos.get("SHA256", ""))
+                and campos.get("Size", "").isdecimal()):
+            return {"versao": versao, "sha256": campos["SHA256"], "tamanho": int(campos["Size"]),
+                    "mudancas": campos.get("X-DanasOS-Changes", "")}
+    raise ValueError("O índice assinado não contém os metadados esperados.")
+
+
+def conferir(estado, instalada):
+    if not FONTE.is_file() or not CHAVE.is_file():
+        raise ValueError("A configuração oficial está ausente. Reinstale o pacote danasos-experience verificado.")
+    INDICES.mkdir(exist_ok=True)
+    estado.update(assinatura="Não verificada", disponivel=None)
+    apt("apt-get", "-o", "APT::Update::Error-Mode=any", "update")
+    estado.update(assinatura="Verificada pelo APT", ultima_verificacao=agora())
+    politica = apt("apt-cache", "policy", PACOTE)
     nova = next((linha.split(":", 1)[1].strip() for linha in politica.splitlines()
                  if linha.strip().startswith("Candidate:")), "")
-    if not nova or nova == "(none)" or nova == atual[1]:
-        return
-    maior = subprocess.run(("dpkg", "--compare-versions", nova, "gt", atual[1]), env=AMBIENTE)
-    if maior.returncode == 1:
-        return
-    maior.check_returncode()
-    instalar = ("--only-upgrade", "--no-remove", "--no-install-recommends",
-                "install", f"{PACOTE}={nova}")
-    simulacao = ler("apt-get", *opcoes, "--simulate", *instalar)
-    atualizacao_prevista = False
+    if not nova or nova in {"(none)", instalada}:
+        return None
+    if not VERSAO.fullmatch(nova):
+        raise ValueError("A versão publicada não foi reconhecida.")
+    ordem = subprocess.run(("dpkg", "--compare-versions", nova, "gt", instalada), env=AMBIENTE)
+    if ordem.returncode == 1:
+        return None
+    ordem.check_returncode()
+    estado["disponivel"] = metadados(nova)
+    return estado["disponivel"]
+
+
+def somar(arquivo):
+    with arquivo.open("rb") as fluxo:
+        return hashlib.file_digest(fluxo, "sha256").hexdigest()
+
+
+def caminho(dados):
+    versao = dados["versao"]
+    if not VERSAO.fullmatch(versao):
+        raise ValueError("Versão de recuperação inválida.")
+    return CACHE / f"{PACOTE}_{versao}_all.deb"
+
+
+def validar_arquivo(arquivo, dados):
+    if arquivo.stat().st_size != dados["tamanho"] or somar(arquivo) != dados["sha256"]:
+        raise ValueError("O pacote falhou na verificação de integridade.")
+    for campo, esperado in (("Package", PACOTE), ("Version", dados["versao"]), ("Architecture", "all")):
+        if rodar("dpkg-deb", "-f", str(arquivo), campo).strip() != esperado:
+            raise ValueError("Os metadados internos do pacote divergem do índice.")
+
+
+def baixar(dados):
+    destino = caminho(dados)
+    if destino.is_file():
+        validar_arquivo(destino, dados)
+        return destino
+    with tempfile.TemporaryDirectory(dir=CACHE) as pasta:
+        apt("apt-get", "download", f'{PACOTE}={dados["versao"]}', cwd=pasta)
+        arquivo = Path(pasta) / destino.name
+        validar_arquivo(arquivo, dados)
+        arquivo.replace(destino)
+    return destino
+
+
+def instalar(arquivo, downgrade=False):
+    args = ["--no-download", "--no-remove", "--no-install-recommends", "install", str(arquivo)]
+    simulacao = apt("apt-get", "--simulate", *args)
+    instalacao = False
     for linha in simulacao.splitlines():
         partes = linha.split()
         if partes and partes[0] in {"Inst", "Conf", "Remv", "Purg"}:
             if len(partes) < 2 or partes[0] not in {"Inst", "Conf"} or partes[1] != PACOTE:
-                raise ValueError("A atualização exigiria alterações em outro pacote.")
-            if partes[0] == "Inst":
-                atualizacao_prevista = True
-    if not atualizacao_prevista:
-        raise ValueError("O APT não confirmou a atualização na simulação.")
-    rodar("apt-get", *opcoes, "-y", *instalar)
-
-
-def ativar():
-    conferir_canal()
-    rodar("systemctl", "daemon-reload")
-    MARCADOR.parent.mkdir(parents=True, exist_ok=True)
-    novo = not MARCADOR.exists()
-    MARCADOR.touch()
-    try:
-        rodar("systemctl", "enable", "--now", TIMER)
-    except subprocess.CalledProcessError:
-        if novo:
-            MARCADOR.unlink(missing_ok=True)
-        raise
-    print("Atualização automática ativada.")
+                raise ValueError("A operação exigiria alterações em outro pacote.")
+            instalacao |= partes[0] == "Inst"
+    if not instalacao:
+        raise ValueError("O APT não confirmou a instalação.")
+    opcoes = ["--allow-downgrades"] if downgrade else []
+    apt("apt-get", "-y", *opcoes, *args)
 
 
 def desativar():
-    MARCADOR.unlink(missing_ok=True)
     rodar("systemctl", "disable", "--now", TIMER)
-    print("Atualização automática desativada.")
+    MARCADOR.unlink(missing_ok=True)
+
+
+def executar(acao, estado):
+    instalada = versao_atual()
+    estado.update(instalada=instalada, canal=CANAL, erro=None)
+    if acao == "desativar":
+        desativar()
+        return
+    if acao == "rollback":
+        dados = estado.get("recuperacao")
+        if not dados or dados["versao"] == instalada:
+            raise ValueError("Não há versão anterior disponível para recuperação.")
+        arquivo = caminho(dados)
+        validar_arquivo(arquivo, dados)
+        desativar()
+        instalar(arquivo, downgrade=True)
+        estado.update(instalada=versao_atual(), recuperacao=None, disponivel=None, aplicada=dados)
+        return
+    if acao == "executar" and not MARCADOR.is_file():
+        return
+    nova = conferir(estado, instalada)
+    if acao == "ativar":
+        rodar("systemctl", "daemon-reload")
+        MARCADOR.parent.mkdir(parents=True, exist_ok=True)
+        ja_ativa = MARCADOR.exists()
+        MARCADOR.touch()
+        try:
+            rodar("systemctl", "enable", "--now", TIMER)
+        except subprocess.CalledProcessError:
+            if not ja_ativa:
+                MARCADOR.unlink(missing_ok=True)
+            raise
+    elif nova and acao in {"instalar", "executar"}:
+        anterior = estado.get("aplicada")
+        if anterior and anterior["versao"] == instalada and caminho(anterior).is_file():
+            validar_arquivo(caminho(anterior), anterior)
+            estado["recuperacao"] = anterior
+        arquivo = baixar(nova)
+        escrever_status(estado)
+        instalar(arquivo)
+        if versao_atual() != nova["versao"]:
+            raise ValueError("A versão instalada após a operação diverge da versão esperada.")
+        estado.update(instalada=nova["versao"], aplicada=nova, disponivel=None)
+        manter = {arquivo, caminho(estado["recuperacao"]) if estado.get("recuperacao") else arquivo}
+        for antiga in CACHE.glob(f"{PACOTE}_*_all.deb"):
+            if antiga not in manter:
+                antiga.unlink()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("acao", choices=("ativar", "desativar", "verificar", "instalar", "executar", "rollback"))
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        parser.exit(1, "A ação precisa de autorização administrativa.\n")
+    if {"boot=live", "boot=casper"}.intersection(Path("/proc/cmdline").read_text().split()):
+        parser.exit(1, "As atualizações são aplicadas no danasOS instalado.\n")
+    try:
+        ESTADO.mkdir(mode=0o755, parents=True, exist_ok=True)
+        CACHE.mkdir(mode=0o700, exist_ok=True)
+        with (ESTADO / "lock").open("a") as trava:
+            fcntl.flock(trava, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            estado = ler_status()
+            estado["ultima_tentativa"] = agora()
+            try:
+                executar(args.acao, estado)
+            except (OSError, ValueError, subprocess.CalledProcessError) as erro:
+                detalhe = erro.stdout if isinstance(erro, subprocess.CalledProcessError) else str(erro)
+                estado["erro"] = (detalhe or str(erro)).strip()[-1500:]
+                raise
+            finally:
+                escrever_status(estado)
+    except BlockingIOError:
+        parser.exit(1, "Já existe uma operação de atualização em andamento.\n")
+    except (OSError, ValueError, subprocess.CalledProcessError) as erro:
+        detalhe = erro.stdout if isinstance(erro, subprocess.CalledProcessError) else str(erro)
+        parser.exit(1, f"Atualização do danasOS: {(detalhe or str(erro)).strip()[-1500:]}\n")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
-    acoes = {"ativar": ativar, "desativar": desativar, "executar": atualizar}
-    parser.add_argument("acao", choices=acoes)
-    args = parser.parse_args()
-    if os.geteuid() != 0:
-        parser.exit(1, "Execute com sudo.\n")
-    try:
-        acoes[args.acao]()
-    except (OSError, ValueError, subprocess.CalledProcessError) as erro:
-        parser.exit(1, f"Atualização automática: {erro}\n")
+    main()
