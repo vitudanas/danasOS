@@ -145,6 +145,8 @@ def instalar(arquivo, downgrade=False):
     # Exclua as origens da simulação para analisar somente esse .deb e o estado instalado.
     args = ["-o", "Dir::Etc::sourcelist=/dev/null", "--no-remove",
             "--no-install-recommends", "install", str(arquivo)]
+    if downgrade:
+        args.insert(0, "--allow-downgrades")
     simulacao = apt("apt-get", "--simulate", *args)
     instalacao = False
     for linha in simulacao.splitlines():

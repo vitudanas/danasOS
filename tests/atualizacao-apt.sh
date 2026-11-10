@@ -94,4 +94,7 @@ versao 0.4-1
 mv "$tmp/apt-anterior-0.4-2" "$tmp/apt"
 up instalar
 versao 0.4-1
+publicar 0.3-9
+up instalar
+versao 0.4-1
 echo 'Upgrade assinado, repetição, corrupção, assinatura inválida, offline e recuperação verificados.'
