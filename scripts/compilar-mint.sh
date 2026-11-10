@@ -119,8 +119,10 @@ pacotes=(
     gnome-software-plugin-flatpak papirus-icon-theme gamemode vulkan-tools mokutil
 )
 echo 'Baixando os pacotes do kernel e da NVIDIA pelos índices assinados do APT'
-apt_mint --print-uris -o Acquire::ForceHash=SHA256 install -y --no-install-recommends \
-    "${pacotes[@]}" > "$tmp/pacotes-apt"
+for hash in SHA512 SHA256; do
+    apt_mint --print-uris -o "Acquire::ForceHash=$hash" install -y --no-install-recommends \
+        "${pacotes[@]}"
+done > "$tmp/pacotes-apt"
 python3 "$repo/scripts/mint-apt-aria2.py" < "$tmp/pacotes-apt" > "$tmp/pacotes-aria2"
 if test -s "$tmp/pacotes-aria2"; then
     timeout --kill-after=10s 5m aria2c --no-conf=true --input-file="$tmp/pacotes-aria2" \
@@ -130,7 +132,7 @@ if test -s "$tmp/pacotes-aria2"; then
         --connect-timeout=8 --timeout=15 --max-tries=4 --retry-wait=1 \
         --summary-interval=30 --console-log-level=warn
 fi
-echo 'Completando pelo APT os downloads que não exportaram SHA-256'
+echo 'Completando pelo APT os downloads que não exportaram SHA-256 ou SHA-512'
 timeout --kill-after=10s 3m chroot "$raiz" env DEBIAN_FRONTEND=noninteractive LC_ALL=C \
     apt-get -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 -o Acquire::Retries=1 \
     --download-only install -y --no-install-recommends "${pacotes[@]}"
