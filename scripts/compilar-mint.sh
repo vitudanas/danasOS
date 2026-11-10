@@ -9,9 +9,8 @@ nome=danasOS-0.3-amd64-mint-hwe
 test "$(id -u)" = 0
 test ! -e "$saida/$nome.iso"
 base=linuxmint-22.3-xfce-64bit-hwe-7.0.iso
-origem=https://pub.linuxmint.io/hwe
-chave=27DEB15644C6B3CF3BD7D291300F846BA25BAE09
 tmp=$(mktemp -d)
+base_dir=${2:-$tmp}
 raiz="$tmp/root"
 midia="$tmp/iso"
 montagens=()
@@ -23,28 +22,8 @@ limpar() {
     rm -rf -- "$tmp"
 }
 trap limpar EXIT
-baixar() {
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
-        --connect-timeout 20 --speed-time 40 --speed-limit 1024 --max-time 480 \
-        --retry 2 --output "$2" "$1"
-}
-
-echo 'Verificando origem e assinatura da ISO Mint'
-mkdir -m 700 "$tmp/gnupg"
-baixar "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x$chave" "$tmp/mint.asc"
-gpg --homedir "$tmp/gnupg" --batch --import "$tmp/mint.asc"
-gpg --homedir "$tmp/gnupg" --batch --export "$chave" > "$tmp/mint.gpg"
-test -s "$tmp/mint.gpg"
-for arquivo in sha256sum.txt sha256sum.txt.gpg "$base"; do
-    baixar "$origem/$arquivo" "$tmp/$arquivo"
-done
-gpgv --keyring "$tmp/mint.gpg" "$tmp/sha256sum.txt.gpg" "$tmp/sha256sum.txt"
-(
-    cd "$tmp"
-    awk -v nome="*$base" '$2 == nome {print; n++} END {exit n != 1}' sha256sum.txt | sha256sum -c -
-)
-
-xorriso -osirrox on -indev "$tmp/$base" -extract / "$midia"
+bash "$repo/scripts/baixar-mint.sh" "$base_dir"
+xorriso -osirrox on -indev "$base_dir/$base" -extract / "$midia"
 chmod -R u+rwX "$midia"
 unsquashfs -no-progress -d "$raiz" "$midia/casper/filesystem.squashfs"
 rm -- "$midia/casper/filesystem.squashfs"
@@ -200,7 +179,7 @@ for arquivo in casper/vmlinuz casper/initrd.lz casper/filesystem.squashfs \
         mapear+=(-map "$midia/$arquivo" "/$arquivo")
     fi
 done
-xorriso -indev "$tmp/$base" -outdev "$saida/$nome.iso" -boot_image any replay "${mapear[@]}"
+xorriso -indev "$base_dir/$base" -outdev "$saida/$nome.iso" -boot_image any replay "${mapear[@]}"
 chmod 0644 "$saida/$nome.iso"
 (cd "$saida" && sha256sum "$nome.iso" > "$nome.sha256")
 printf 'Kernel=%s\nNVIDIA=%s\nVMD_Acer=validacao_fisica_pendente\n' \

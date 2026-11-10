@@ -9,7 +9,7 @@ No danasOS instalado, **Central danasOS → Atualizações → Ativar automátic
 No Ubuntu 24.04 amd64, com pelo menos 25 GiB livres no diretório temporário, execute:
 
 ```sh
-sudo apt-get install squashfs-tools xorriso initramfs-tools-core sbsigntool zstd
+sudo apt-get install aria2 squashfs-tools xorriso initramfs-tools-core sbsigntool zstd
 sudo bash scripts/compilar-mint.sh "$PWD/dist"
 ```
 

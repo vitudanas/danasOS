@@ -7,6 +7,7 @@ on:
       - '.github/workflows/iso-mint.yml'
       - 'config/includes.chroot/**'
       - 'publicar.py'
+      - 'scripts/baixar-mint.sh'
       - 'scripts/compilar-mint.sh'
       - 'scripts/midia-mint.py'
       - 'scripts/danasos-verificar-vm.service'
@@ -17,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: iso-mint-build-${{ github.ref }}
+  group: iso-mint-base-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -34,10 +35,13 @@ jobs:
           set -eu
           sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet /opt/ghc
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends squashfs-tools xorriso initramfs-tools-core sbsigntool zstd qemu-system-x86 ovmf gdisk mtools socat
+          sudo apt-get install -y --no-install-recommends aria2 squashfs-tools xorriso initramfs-tools-core sbsigntool zstd qemu-system-x86 ovmf gdisk mtools socat
+      - name: Baixar e autenticar a ISO original do Mint
+        timeout-minutes: 16
+        run: bash scripts/baixar-mint.sh "$RUNNER_TEMP/mint-base"
       - name: Compilar Mint Xfce HWE com NVIDIA Open
         timeout-minutes: 40
-        run: sudo bash scripts/compilar-mint.sh "$RUNNER_TEMP/danasos-mint"
+        run: sudo bash scripts/compilar-mint.sh "$RUNNER_TEMP/danasos-mint" "$RUNNER_TEMP/mint-base"
       - name: Testar boot UEFI, Secure Boot, NVMe FAT32, Xfce e ABNT2
         run: |
           set -eu
