@@ -113,11 +113,26 @@ for fase in preinst postinst postrm; do
     mkdir -p "$raiz/etc/kernel/$fase.d" "$raiz/usr/share/kernel/$fase.d"
 done
 no_mint run-parts --test /etc/kernel/preinst.d /usr/share/kernel/preinst.d
-apt_mint install -y --no-install-recommends \
+pacotes=(
     "linux-image-$abi" "linux-modules-nvidia-$driver-open-$abi" \
     "libnvidia-gl-$driver" "nvidia-utils-$driver" "xserver-xorg-video-nvidia-$driver" \
-    /tmp/danasos-experience_0.2-2_all.deb gnome-software-plugin-flatpak \
-    papirus-icon-theme gamemode vulkan-tools mokutil
+    gnome-software-plugin-flatpak papirus-icon-theme gamemode vulkan-tools mokutil
+)
+echo 'Baixando os pacotes do kernel e da NVIDIA pelos índices assinados do APT'
+apt_mint --print-uris -o Acquire::ForceHash=SHA256 install -y --no-install-recommends \
+    "${pacotes[@]}" > "$tmp/pacotes-apt"
+python3 "$repo/scripts/mint-apt-aria2.py" < "$tmp/pacotes-apt" > "$tmp/pacotes-aria2"
+if test -s "$tmp/pacotes-aria2"; then
+    timeout --kill-after=10s 5m aria2c --no-conf=true --input-file="$tmp/pacotes-aria2" \
+        --dir="$raiz/var/cache/apt/archives" --check-integrity=true --allow-overwrite=true \
+        --auto-file-renaming=false --file-allocation=none --max-concurrent-downloads=6 \
+        --split=6 --max-connection-per-server=3 --min-split-size=4M \
+        --connect-timeout=8 --timeout=15 --max-tries=4 --retry-wait=1 \
+        --summary-interval=30 --console-log-level=warn
+fi
+echo 'Instalando os pacotes já verificados'
+apt_mint --no-download install -y --no-install-recommends "${pacotes[@]}"
+apt_mint install -y --no-install-recommends /tmp/danasos-experience_0.2-2_all.deb
 rm -- "$raiz/etc/apt/sources.list.d/danasos-kernel-teste.list" "$raiz/etc/apt/preferences.d/danasos-kernel-teste"
 test -s "$raiz/boot/vmlinuz-$abi"
 for modulo in nvidia nvidia_modeset nvidia_drm nvidia_uvm; do

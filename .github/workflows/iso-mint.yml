@@ -9,6 +9,7 @@ on:
       - 'publicar.py'
       - 'scripts/baixar-mint.sh'
       - 'scripts/compilar-mint.sh'
+      - 'scripts/mint-apt-aria2.py'
       - 'scripts/danasos-prime-display.sh'
       - 'scripts/midia-mint.py'
       - 'scripts/danasos-verificar-vm.service'
