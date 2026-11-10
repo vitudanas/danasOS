@@ -2,7 +2,16 @@
 set -euo pipefail
 
 tmp=$(mktemp -d)
-trap 'rm -rf -- "$tmp"' EXIT
+relogio_original=$(date -u +%s)
+inicio=$SECONDS
+relogio_ajustado=0
+limpar() {
+    if [ "$relogio_ajustado" -eq 1 ]; then
+        sudo date -u --set "@$((relogio_original + SECONDS - inicio))" >/dev/null
+    fi
+    rm -rf -- "$tmp"
+}
+trap limpar EXIT
 mkdir "$tmp/bin" "$tmp/usuario" "$tmp/chave-alternativa"
 chmod 700 "$tmp/chave-alternativa"
 fpr=03F1100B22C6C9760977042E0FCEC1F004C97E6B
@@ -65,6 +74,21 @@ else
     printf 'O bloco anterior falhou antes de instalar, código %s.\n' "$status_anterior"
 fi
 rm -f -- "$MARCADOR_SUDO"
+
+# A VM descartável pode estar atrás da data de publicação. Primeiro teste
+# a recusa nessa condição, depois execute com um horário válido de teste.
+if [ "$relogio_original" -lt 1794346264 ]; then
+    if execucao_isolada env PATH="$tmp/bin:$PATH" CASO=relogio sh -x "$tmp/bootstrap.sh" \
+        > "$tmp/relogio.log" 2>&1; then
+        echo 'O bloco aceitou o relógio atrasado.' >&2
+        exit 1
+    fi
+    cat "$tmp/relogio.log"
+    grep -Fq 'Relógio atrasado' "$tmp/relogio.log"
+    test ! -e "$MARCADOR_SUDO"
+    relogio_ajustado=1
+    sudo date -u --set '@1794346564'
+fi
 
 for caso in chave pacote assinatura; do
     if execucao_isolada env PATH="$tmp/bin:$PATH" CASO="$caso" sh -x "$tmp/bootstrap.sh" \

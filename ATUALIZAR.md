@@ -4,6 +4,8 @@ O primeiro pacote instala a configuração do canal oficial e a chave pública d
 
 No terminal do **danasOS instalado**, copie o bloco abaixo uma vez. Ele baixa arquivos para uma pasta temporária, verifica o fingerprint e a assinatura do pacote, e só então pede autorização para instalar. Se qualquer verificação falhar, ele encerra sem instalar.
 
+Se o relógio estiver atrasado, confira `timedatectl status` e habilite a sincronização com `sudo timedatectl set-ntp true`. Aguarde o sistema sincronizar antes de tentar de novo. A assinatura da 0.4-1 é de **10/11/2026 às 21:31:04 UTC** (18:31:04 em Brasília). O GnuPG pode mostrar “Sem chave pública” quando o relógio local está anterior à criação da chave, mesmo com o arquivo público correto.
+
 ```sh
 (
   set -eu
@@ -18,6 +20,11 @@ No terminal do **danasOS instalado**, copie o bloco abaixo uma vez. Ele baixa ar
   if dpkg --compare-versions "$atual" ge 0.4-1; then
     printf '%s\n' 'Já está nesta versão ou em uma versão mais recente. Use a Central.'
     exit 0
+  fi
+  # Data da assinatura do pacote inicial (2026-11-10 21:31:04 UTC).
+  if [ "$(date -u +%s)" -lt 1794346264 ]; then
+    printf 'Relógio atrasado (%s). Sincronize a data e hora e tente novamente.\n' "$(date -u)" >&2
+    exit 1
   fi
   mkdir -m 700 gnupg
   gpg_local() { gpg --no-options --homedir "$pasta/gnupg" --batch "$@"; }
