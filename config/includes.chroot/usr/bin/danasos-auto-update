@@ -8,7 +8,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import pwd
 import re
+import stat
 import subprocess
 import tempfile
 
@@ -132,9 +134,20 @@ def baixar(dados):
     if destino.is_file():
         validar_arquivo(destino, dados)
         return destino
-    with tempfile.TemporaryDirectory(dir=CACHE) as pasta:
-        apt("apt-get", "download", f'{PACOTE}={dados["versao"]}', cwd=pasta)
+    if dados["tamanho"] > 64 * 1024 * 1024:
+        raise ValueError("O pacote excede o limite de 64 MiB do canal de experiência.")
+    with tempfile.TemporaryDirectory(dir=ESTADO) as download, tempfile.TemporaryDirectory(dir=CACHE) as pasta:
+        usuario_apt = pwd.getpwnam("_apt")
+        os.chown(download, usuario_apt.pw_uid, usuario_apt.pw_gid)
+        apt("apt-get", "download", f'{PACOTE}={dados["versao"]}', cwd=download)
         arquivo = Path(pasta) / destino.name
+        recebido = Path(download) / destino.name
+        # Copie da área do sandbox para uma área root antes de validar e instalar.
+        with os.fdopen(os.open(recebido, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as fluxo:
+            atributos = os.fstat(fluxo.fileno())
+            if not stat.S_ISREG(atributos.st_mode) or atributos.st_size != dados["tamanho"]:
+                raise ValueError("O download não é um arquivo com o tamanho esperado.")
+            arquivo.write_bytes(fluxo.read(dados["tamanho"] + 1))
         validar_arquivo(arquivo, dados)
         arquivo.replace(destino)
     return destino

@@ -50,7 +50,7 @@ jobs:
         run: |
           set -eu
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends apt-utils gnupg python3-gi gir1.2-gtk-3.0 gnome-software flatpak xfce4-terminal pkexec xvfb xauth
+          sudo apt-get install -y --no-install-recommends apt-utils gnupg python3-gi gir1.2-gtk-3.0 librsvg2-common gnome-software flatpak xfce4-terminal pkexec xvfb xauth
           sudo bash tests/atualizacao-apt.sh
       - name: Abrir a Central e validar CSS em GTK3
         run: |

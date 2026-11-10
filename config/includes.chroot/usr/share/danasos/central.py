@@ -12,6 +12,7 @@ import threading
 import gi
 
 gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk
 
 from catalogo import APLICATIVOS
@@ -61,7 +62,10 @@ class Central(Gtk.Window):
     def __init__(self):
         super().__init__(title="Central danasOS")
         self.set_default_size(880, 650)
-        self.set_icon_from_file(str(PASTA / "danasos.svg"))
+        try:
+            self.set_icon_from_file(str(PASTA / "danasos.svg"))
+        except GLib.Error:
+            self.set_icon_name("preferences-system")
         self.connect("destroy", Gtk.main_quit)
         self.apps = {}
         self.transacao = False
