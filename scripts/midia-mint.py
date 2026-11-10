@@ -20,6 +20,7 @@ def configurar_boot(midia):
     config = config.replace("Start Linux Mint 22.3 Xfce 64-bit", "danasOS 0.3 - Mint Xfce HWE")
     config = config.replace("quiet splash --", "nvidia-drm.modeset=1 quiet splash --", 1)
     config = config.replace("noapic noacpi nosplash irqpoll nomodeset", "nomodeset plymouth.enable=0")
+    config = config.replace("\ngrub_platform\n", "\n")
     grub.write_text("set timeout=8\n" + config, encoding="utf-8")
 
     isolinux = midia / "isolinux/txt.cfg"

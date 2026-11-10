@@ -6,10 +6,40 @@ captura=${2:?Informe o caminho para a captura em caso de falha}
 edicao=${3:-debian}
 trabalho=$(mktemp -d)
 serial="$trabalho/serial.log"
+serial_limpo="$trabalho/serial-sem-cr.log"
 monitor="$trabalho/monitor"
 vm=
 comando_vm() {
     printf '%s\n' "$1" | socat -T 1 - "UNIX-CONNECT:$monitor" >/dev/null
+}
+capturar_desktop() {
+    # O Xfce cria o processo da sessão antes de desenhar a área de trabalho.
+    for tentativa_tela in $(seq 1 12); do
+        sleep 5
+        comando_vm "screendump $captura"
+        if python3 - "$captura" <<'PY'
+import sys
+
+with open(sys.argv[1], "rb") as ppm:
+    if ppm.readline().strip() != b"P6":
+        sys.exit(1)
+    largura, altura = map(int, ppm.readline().split())
+    if ppm.readline().strip() != b"255":
+        sys.exit(1)
+    pixels = ppm.read()
+if len(pixels) != largura * altura * 3:
+    sys.exit(1)
+amostra = [pixels[pos:pos + 3] for pos in range(0, len(pixels), 93)]
+# Não aceitar uma tela uniforme nem um cursor sobre fundo preto.
+if len(set(amostra)) < 64 or sum(max(rgb) >= 24 for rgb in amostra) < len(amostra) / 50:
+    sys.exit(1)
+PY
+        then
+            return 0
+        fi
+    done
+    echo 'O Xfce iniciou, mas a captura não mostrou uma área de trabalho visível.' >&2
+    return 1
 }
 limpar() {
     local resultado=$?
@@ -64,14 +94,12 @@ qemu-system-x86_64 -machine q35,smm=on,accel=tcg -smp 4 -m 4096 \
 vm=$!
 for tentativa in $(seq 1 150); do
     if grep -q '^DANASOS_XFCE_PRONTO' "$serial"; then
-        grep -E "$kernel" "$serial"
-        grep -F 'SecureBoot enabled' "$serial"
-        grep -E '^/dev/nvme0n1p1[[:space:]]+vfat' "$serial"
+        tr -d '\r' < "$serial" > "$serial_limpo"
+        grep -E "$kernel" "$serial_limpo"
+        grep -F 'SecureBoot enabled' "$serial_limpo"
+        grep -E '^/dev/nvme0n1p1[[:space:]]+vfat' "$serial_limpo"
         if [[ "$edicao" == mint ]]; then
-            # O processo da sessão pode surgir antes de o painel e o desktop desenharem.
-            sleep 25
-            comando_vm "screendump $captura"
-            test -s "$captura"
+            capturar_desktop
         fi
         exit 0
     fi
