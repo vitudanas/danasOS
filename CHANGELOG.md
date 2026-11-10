@@ -22,6 +22,11 @@
 - O boot da ISO Mint anterior com Secure Boot, NVMe em FAT32, Xfce e ABNT2 foi validado em QEMU. O usuário confirmou o uso normal dessa base no Acer.
 - O pacote preserva o kernel assinado, o driver, os dados, os launchers existentes e as configurações de boot. As melhorias de desktop e updater são instaláveis sem nova ISO.
 
+**Testado nesta entrega**
+
+- [CI Linux](https://github.com/vitudanas/danasOS/actions/runs/42875786618): migração da 0.2-2, verificação do índice com chave de teste, atualização, repetição, recusa de pacote corrompido, assinatura inválida, canal indisponível e versão antiga, recuperação offline, empacotamento, ShellCheck e GTK3.
+- [Canal público](https://vitudanas.github.io/danasOS/apt/InRelease): releitura HTTPS sem autenticação, conferência dos hashes e das assinaturas do índice e do pacote inicial.
+
 **Parcial**
 
 - O módulo Xfce controla resolução, monitores, escala e Hz. A Central oferece ajuste de fonte independente. A combinação com 240 Hz e DPI misto continua sem validação no Acer.

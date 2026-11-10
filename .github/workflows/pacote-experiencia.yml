@@ -54,14 +54,4 @@ jobs:
           sudo bash tests/atualizacao-apt.sh
       - name: Abrir a Central e validar CSS em GTK3
         run: |
-          cd config/includes.chroot/usr/share
-          xvfb-run -a env PYTHONPATH=danasos /usr/bin/python3 - <<'PY'
-          from central import Central, Gtk
-          app = Central()
-          app.show_all()
-          while Gtk.events_pending():
-              Gtk.main_iteration()
-          assert len(app.apps) == 6
-          tema = Gtk.CssProvider()
-          tema.load_from_path("themes/danasOS/gtk-3.0/gtk.css")
-          PY
+          xvfb-run -a env PYTHONPATH=config/includes.chroot/usr/share/danasos /usr/bin/python3 tests/central-gtk.py
