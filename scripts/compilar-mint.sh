@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+
+repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+saida=$(realpath -m -- "${1:?Informe a pasta de saída}")
+mkdir -p "$saida"
+nome=danasOS-0.3-amd64-mint-hwe
+test "$(id -u)" = 0
+test ! -e "$saida/$nome.iso"
+base=linuxmint-22.3-xfce-64bit-hwe-7.0.iso
+origem=https://pub.linuxmint.io/hwe
+chave=27DEB15644C6B3CF3BD7D291300F846BA25BAE09
+tmp=$(mktemp -d)
+raiz="$tmp/root"
+midia="$tmp/iso"
+montagens=()
+limpar() {
+    local i
+    for ((i=${#montagens[@]}-1; i>=0; i--)); do
+        umount "${montagens[i]}" || return
+    done
+    rm -rf -- "$tmp"
+}
+trap limpar EXIT
+baixar() {
+    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+        --retry 3 --output "$2" "$1"
+}
+
+echo 'Verificando origem e assinatura da ISO Mint'
+mkdir -m 700 "$tmp/gnupg"
+baixar "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x$chave" "$tmp/mint.asc"
+gpg --homedir "$tmp/gnupg" --batch --import "$tmp/mint.asc"
+gpg --homedir "$tmp/gnupg" --batch --export "$chave" > "$tmp/mint.gpg"
+test -s "$tmp/mint.gpg"
+for arquivo in sha256sum.txt sha256sum.txt.gpg "$base"; do
+    baixar "$origem/$arquivo" "$tmp/$arquivo"
+done
+gpgv --keyring "$tmp/mint.gpg" "$tmp/sha256sum.txt.gpg" "$tmp/sha256sum.txt"
+(
+    cd "$tmp"
+    awk -v nome="*$base" '$2 == nome {print; n++} END {exit n != 1}' sha256sum.txt | sha256sum -c -
+)
+
+xorriso -osirrox on -indev "$tmp/$base" -extract / "$midia"
+chmod -R u+rwX "$midia"
+unsquashfs -no-progress -d "$raiz" "$midia/casper/filesystem.squashfs"
+rm -- "$midia/casper/filesystem.squashfs"
+chroot "$raiz" grep -qx 'ID=linuxmint' /etc/os-release
+chroot "$raiz" grep -qx 'UBUNTU_CODENAME=noble' /etc/os-release
+
+overlay="$repo/config/includes.chroot"
+mkdir -p "$raiz/etc/danasos" "$raiz/etc/X11/xorg.conf.d" "$raiz/etc/lightdm/lightdm-gtk-greeter.conf.d"
+touch "$raiz/etc/danasos/base-mint"
+release="$raiz$(chroot "$raiz" realpath /etc/os-release)"
+sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="danasOS 0.3 (Linux Mint 22.3 Xfce)"/' "$release"
+for app in danasos-visual danasos-diagnostico danasos-canal-github; do
+    install -m 0755 "$overlay/usr/local/bin/$app" "$raiz/usr/local/bin/$app"
+done
+install -m 0644 "$overlay/etc/xdg/autostart/danasos-visual.desktop" "$raiz/etc/xdg/autostart/"
+install -m 0644 "$overlay/etc/lightdm/lightdm-gtk-greeter.conf.d/90-danasos.conf" \
+    "$raiz/etc/lightdm/lightdm-gtk-greeter.conf.d/"
+python3 "$repo/publicar.py" --versao 0.2-2 --saida "$tmp"
+install -m 0644 "$tmp/danasos-experience_0.2-2_all.deb" "$raiz/tmp/"
+
+cat > "$raiz/etc/X11/xorg.conf.d/90-danasos-nvidia.conf" <<'XORG'
+Section "OutputClass"
+    Identifier "danasOS NVIDIA"
+    MatchDriver "nvidia-drm"
+    Option "PrimaryGPU" "yes"
+EndSection
+XORG
+cat > "$raiz/etc/default/keyboard" <<'KBD'
+XKBMODEL="abnt2"
+XKBLAYOUT="br"
+XKBVARIANT=""
+XKBOPTIONS=""
+BACKSPACE="guess"
+KBD
+printf '%s\n' vmd nvme nvme_core >> "$raiz/etc/initramfs-tools/modules"
+
+for ponto in dev proc sys; do
+    mount --bind "/$ponto" "$raiz/$ponto"
+    montagens+=("$raiz/$ponto")
+done
+cp -a -- "$raiz/etc/resolv.conf" "$tmp/resolv.conf"
+rm -- "$raiz/etc/resolv.conf"
+cp -L /etc/resolv.conf "$raiz/etc/resolv.conf"
+if test -e "$raiz/usr/sbin/policy-rc.d"; then
+    mv "$raiz/usr/sbin/policy-rc.d" "$tmp/policy-rc.d"
+fi
+printf '#!/bin/sh\nexit 101\n' > "$raiz/usr/sbin/policy-rc.d"
+chmod 0755 "$raiz/usr/sbin/policy-rc.d"
+no_mint() { chroot "$raiz" env DEBIAN_FRONTEND=noninteractive LC_ALL=C "$@"; }
+
+echo 'Instalando kernel HWE e NVIDIA Open da Canonical'
+no_mint apt-get -o APT::Update::Error-Mode=any update
+no_mint apt-get install -y --no-install-recommends \
+    linux-generic-hwe-24.04-edge linux-modules-nvidia-580-open-generic-hwe-24.04-edge \
+    nvidia-driver-580-open nvidia-utils-580 \
+    /tmp/danasos-experience_0.2-2_all.deb gnome-software-plugin-flatpak \
+    papirus-icon-theme gamemode vulkan-tools mokutil
+abi=$(find "$raiz/boot" -name 'vmlinuz-7.0.*-generic' -printf '%f\n' | sort -V | tail -1)
+abi=${abi#vmlinuz-}
+test -n "$abi"
+for modulo in nvidia nvidia_modeset nvidia_drm nvidia_uvm; do
+    assinante=$(no_mint modinfo -k "$abi" -F signer "$modulo")
+    test -n "$assinante"
+    printf '%s %s: %s\n' "$abi" "$modulo" "$assinante"
+done
+test "$(no_mint modinfo -k "$abi" -F version nvidia | cut -d. -f1)" = 580
+if no_mint dpkg-query -W -f='${db:Status-Status}' nvidia-dkms-580-open 2>/dev/null | grep -qx installed; then
+    echo 'A instalação puxou DKMS em vez de usar apenas os módulos assinados.' >&2
+    exit 1
+fi
+for antigo in "$raiz"/boot/vmlinuz-*; do
+    antigo=${antigo##*/vmlinuz-}
+    if [[ "$antigo" != "$abi" && "$antigo" =~ ^[0-9.]+-[0-9]+-generic$ ]]; then
+        mapfile -t pacotes < <(no_mint dpkg-query -W -f='${binary:Package}\n' "linux-*-${antigo%-generic}*" || true)
+        if (("${#pacotes[@]}")); then no_mint apt-get purge -y "${pacotes[@]}"; fi
+    fi
+done
+no_mint flatpak --system remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+no_mint localedef -i pt_BR -f UTF-8 pt_BR.UTF-8
+no_mint setupcon --save-only
+no_mint update-initramfs -u -k "$abi"
+lsinitramfs "$raiz/boot/initrd.img-$abi" > "$tmp/initrd-files"
+for modulo in vmd nvme nvme-core; do
+    grep -E "/${modulo}\.ko(\.(zst|xz|gz))?$" "$tmp/initrd-files"
+done
+sbverify --list "$raiz/boot/vmlinuz-$abi"
+
+sed '/^ConditionVirtualization=/a ConditionKernelCommandLine=boot=casper' \
+    "$repo/scripts/danasos-verificar-vm.service" > "$raiz/etc/systemd/system/danasos-verificar-vm.service"
+mkdir -p "$raiz/etc/systemd/system/graphical.target.wants"
+ln -s ../danasos-verificar-vm.service "$raiz/etc/systemd/system/graphical.target.wants/"
+no_mint apt-get clean
+find "$raiz/var/lib/apt/lists" -maxdepth 1 -type f -delete
+rm -- "$raiz/tmp/danasos-experience_0.2-2_all.deb" "$raiz/usr/sbin/policy-rc.d" "$raiz/etc/resolv.conf"
+mv "$tmp/resolv.conf" "$raiz/etc/resolv.conf"
+if test -e "$tmp/policy-rc.d"; then mv "$tmp/policy-rc.d" "$raiz/usr/sbin/policy-rc.d"; fi
+for ((i=${#montagens[@]}-1; i>=0; i--)); do umount "${montagens[i]}"; done
+montagens=()
+
+echo 'Empacotando a sessão Live do danasOS'
+cp "$raiz/boot/vmlinuz-$abi" "$midia/casper/vmlinuz"
+cp "$raiz/boot/initrd.img-$abi" "$midia/casper/initrd.lz"
+no_mint dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\n' | \
+    awk '$1 == "ii" {print $2 "\t" $3}' > "$midia/casper/filesystem.manifest"
+du -sx --block-size=1 "$raiz" | cut -f1 > "$midia/casper/filesystem.size"
+mksquashfs "$raiz" "$midia/casper/filesystem.squashfs" -noappend -comp xz -b 1M -no-progress -processors 4
+python3 "$repo/scripts/midia-mint.py" "$midia"
+mapear=()
+for arquivo in casper/vmlinuz casper/initrd.lz casper/filesystem.squashfs \
+    casper/filesystem.manifest casper/filesystem.size boot/grub/grub.cfg \
+    isolinux/txt.cfg md5sum.txt; do
+    if test -f "$midia/$arquivo"; then
+        mapear+=(-map "$midia/$arquivo" "/$arquivo")
+    fi
+done
+xorriso -indev "$tmp/$base" -outdev "$saida/$nome.iso" -boot_image any replay "${mapear[@]}"
+chmod 0644 "$saida/$nome.iso"
+(cd "$saida" && sha256sum "$nome.iso" > "$nome.sha256")
+printf 'Kernel=%s\nNVIDIA=%s\nVMD_Acer=validacao_fisica_pendente\n' \
+    "$abi" "$(no_mint modinfo -k "$abi" -F version nvidia)" > "$saida/$nome.info"

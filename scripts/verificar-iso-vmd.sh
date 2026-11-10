@@ -3,6 +3,7 @@ set -euo pipefail
 
 iso=${1:?Informe o caminho da ISO}
 captura=${2:?Informe o caminho para a captura em caso de falha}
+edicao=${3:-debian}
 trabalho=$(mktemp -d)
 serial="$trabalho/serial.log"
 monitor="$trabalho/monitor"
@@ -28,8 +29,16 @@ trap limpar EXIT
 extraido="$trabalho/iso"
 xorriso -osirrox on -indev "$iso" -extract / "$extraido"
 chmod -R u+rwX "$extraido"
-test -f "$extraido/EFI/boot/bootx64.efi"
-test -f "$extraido/live/filesystem.squashfs"
+test -n "$(find "$extraido" -ipath '*/efi/boot/bootx64.efi' -type f -print -quit)"
+if [[ "$edicao" == mint ]]; then
+    test -f "$extraido/casper/filesystem.squashfs"
+    # O Mint inclui atalhos de repositório que só existem em ISO9660.
+    find "$extraido/dists" -type l -delete
+    kernel='^7\.0\.[0-9]+-[0-9]+-generic$'
+else
+    test -f "$extraido/live/filesystem.squashfs"
+    kernel='^7\.3\.3\+deb14-amd64$'
+fi
 if [[ -n "$(find "$extraido" \( -type l -o -type f -size +4294967295c \) -print -quit)" ]]; then
     echo 'A ISO contém links ou arquivos que não cabem em FAT32.' >&2
     exit 1
@@ -55,7 +64,7 @@ qemu-system-x86_64 -machine q35,smm=on,accel=tcg -smp 4 -m 4096 \
 vm=$!
 for tentativa in $(seq 1 150); do
     if grep -q '^DANASOS_XFCE_PRONTO' "$serial"; then
-        grep -F '7.3.3+deb14-amd64' "$serial"
+        grep -E "$kernel" "$serial"
         grep -F 'SecureBoot enabled' "$serial"
         grep -E '^/dev/nvme0n1p1[[:space:]]+vfat' "$serial"
         exit 0

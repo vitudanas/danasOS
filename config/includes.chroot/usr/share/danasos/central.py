@@ -80,10 +80,13 @@ class Central(Gtk.Window):
 
         acoes = Gtk.FlowBox(column_spacing=8, row_spacing=8, homogeneous=True)
         acoes.set_selection_mode(Gtk.SelectionMode.NONE)
+        driver = ["xfce4-terminal", "--hold", "--execute", "sudo", "danasos-driver-nvidia"]
+        if Path("/etc/danasos/base-mint").is_file():
+            driver = ["driver-manager"]
         for titulo, argumentos in (
             ("Loja de aplicativos", ["gnome-software"]),
             ("Atualizações", None),
-            ("Driver NVIDIA", ["xfce4-terminal", "--hold", "--execute", "sudo", "danasos-driver-nvidia"]),
+            ("Driver NVIDIA", driver),
             ("Diagnóstico", ["xfce4-terminal", "--hold", "--execute", "danasos-diagnostico"]),
             ("Configurações", ["xfce4-settings-manager"]),
         ):

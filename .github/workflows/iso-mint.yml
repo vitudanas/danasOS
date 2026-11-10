@@ -1,0 +1,58 @@
+name: Compilar e validar danasOS Mint
+
+on:
+  push:
+    branches: [codex/mint-hwe]
+    paths:
+      - '.github/workflows/iso-mint.yml'
+      - 'config/includes.chroot/**'
+      - 'publicar.py'
+      - 'scripts/compilar-mint.sh'
+      - 'scripts/midia-mint.py'
+      - 'scripts/danasos-verificar-vm.service'
+      - 'scripts/verificar-iso-vmd.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iso-mint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iso:
+    if: github.repository == 'vitudanas/danasOS' && github.ref_name == 'codex/mint-hwe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      - name: Instalar ferramentas
+        run: |
+          set -eu
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends squashfs-tools xorriso initramfs-tools-core sbsigntool zstd qemu-system-x86 ovmf gdisk mtools socat
+      - name: Compilar Mint Xfce HWE com NVIDIA Open
+        run: sudo bash scripts/compilar-mint.sh "$RUNNER_TEMP/danasos-mint"
+      - name: Testar boot UEFI, Secure Boot, NVMe FAT32, Xfce e ABNT2
+        run: |
+          set -eu
+          pasta="$RUNNER_TEMP/danasos-mint"
+          (cd "$pasta" && sha256sum -c danasOS-0.3-amd64-mint-hwe.sha256)
+          bash scripts/verificar-iso-vmd.sh "$pasta/danasOS-0.3-amd64-mint-hwe.iso" "$RUNNER_TEMP/boot-mint.ppm" mint
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: tela-vm-mint
+          path: ${{ runner.temp }}/boot-mint.ppm
+          retention-days: 2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: danasOS-Mint-HWE-teste
+          path: ${{ runner.temp }}/danasos-mint/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

@@ -54,9 +54,11 @@ def escrever(arquivo, dados):
 
 
 def configurar(url, arquivo, fingerprint):
-    if os.geteuid() != 0 or platform.freedesktop_os_release().get("ID") != "danasos":
+    base = platform.freedesktop_os_release().get("ID")
+    mint = base == "linuxmint" and Path("/etc/danasos/base-mint").is_file()
+    if os.geteuid() != 0 or (base != "danasos" and not mint):
         raise RuntimeError("Execute com sudo no danasOS instalado.")
-    if "boot=live" in Path("/proc/cmdline").read_text().split():
+    if {"boot=live", "boot=casper"}.intersection(Path("/proc/cmdline").read_text().split()):
         raise RuntimeError("Inicie o danasOS pelo SSD antes de adicionar o canal.")
     url, host = validar_url(url)
     chave = chave_publica(arquivo, fingerprint)

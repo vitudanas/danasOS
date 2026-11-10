@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Loja danasOS
-Comment=Instale aplicativos do Debian e do Flathub
+Comment=Instale aplicativos da distribuição e do Flathub
 Exec=gnome-software
 Icon=org.gnome.Software
 Terminal=false

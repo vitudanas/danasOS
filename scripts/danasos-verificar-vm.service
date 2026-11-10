@@ -17,5 +17,5 @@ ExecStart=/bin/sh -ec 'dumpkeys --console=/dev/tty1 --keys-only | grep -E "^keyc
 ExecStart=/bin/sh -ec 'layout=$(runuser -u live -- env DISPLAY=:0 XAUTHORITY=/home/live/.Xauthority setxkbmap -query); echo "$layout"; echo "$layout" | grep -Eq "^model:[[:space:]]+abnt2$"; echo "$layout" | grep -Eq "^layout:[[:space:]]+br$"'
 ExecStart=/usr/bin/uname -r
 ExecStart=/usr/bin/mokutil --sb-state
-ExecStart=/usr/bin/findmnt -n -o SOURCE,FSTYPE /run/live/medium
+ExecStart=/bin/sh -ec 'findmnt -n -o SOURCE,FSTYPE --mountpoint /run/live/medium || findmnt -n -o SOURCE,FSTYPE --mountpoint /cdrom'
 ExecStart=/usr/bin/echo DANASOS_XFCE_PRONTO
