@@ -2,11 +2,15 @@
 set -euo pipefail
 export LC_ALL=C
 
+test "$(id -u)" = 0
+if [[ ${1:-} != --montagens-isoladas ]]; then
+    exec unshare --mount --propagation private bash "${BASH_SOURCE[0]}" --montagens-isoladas "$@"
+fi
+shift
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 saida=$(realpath -m -- "${1:?Informe a pasta de saída}")
 mkdir -p "$saida"
 nome=danasOS-0.3-amd64-mint-hwe
-test "$(id -u)" = 0
 test ! -e "$saida/$nome.iso"
 base=linuxmint-22.3-xfce-64bit-hwe-7.0.iso
 tmp=$(mktemp -d)
@@ -14,11 +18,16 @@ base_dir=${2:-$tmp}
 raiz="$tmp/root"
 midia="$tmp/iso"
 montagens=()
-limpar() {
+desmontar() {
     local i
     for ((i=${#montagens[@]}-1; i>=0; i--)); do
-        umount "${montagens[i]}" || return
+        # Alguns hooks do kernel montam efivarfs sob /sys.
+        umount --recursive "${montagens[i]}" || umount --recursive --lazy "${montagens[i]}" || return
+        unset 'montagens[i]'
     done
+}
+limpar() {
+    desmontar || return
     rm -rf -- "$tmp"
 }
 trap limpar EXIT
@@ -153,13 +162,18 @@ if no_mint dpkg-query -W -f='${db:Status-Status}' "nvidia-dkms-$driver-open" 2>/
     echo 'A instalação puxou DKMS em vez de usar apenas os módulos assinados.' >&2
     exit 1
 fi
+mapfile -t remover < <(no_mint dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\n' 'linux-*' |
+    awk '$1 == "ii" && $2 ~ /^linux-(image-|headers-)?generic-hwe-24[.]04(:amd64)?$/ {print $2}')
 for antigo in "$raiz"/boot/vmlinuz-*; do
     antigo=${antigo##*/vmlinuz-}
     if [[ "$antigo" != "$abi" && "$antigo" =~ ^[0-9.]+-[0-9]+-generic$ ]]; then
         mapfile -t pacotes < <(no_mint dpkg-query -W -f='${binary:Package}\n' "linux-*-${antigo%-generic}*" || true)
-        if (("${#pacotes[@]}")); then apt_mint purge -y "${pacotes[@]}"; fi
+        remover+=("${pacotes[@]}")
     fi
 done
+if (("${#remover[@]}")); then
+    apt_mint --no-download purge -y --no-install-recommends "${remover[@]}"
+fi
 no_mint flatpak --system remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 for aplicativo in org.gnome.Software gnome-software-service mintwelcome; do
     entrada="/etc/xdg/autostart/$aplicativo.desktop"
@@ -185,8 +199,7 @@ find "$raiz/var/lib/apt/lists" -maxdepth 1 -type f -delete
 rm -- "$raiz/tmp/danasos-experience_0.2-2_all.deb" "$raiz/usr/sbin/policy-rc.d" "$raiz/etc/resolv.conf"
 mv "$tmp/resolv.conf" "$raiz/etc/resolv.conf"
 if test -e "$tmp/policy-rc.d"; then mv "$tmp/policy-rc.d" "$raiz/usr/sbin/policy-rc.d"; fi
-for ((i=${#montagens[@]}-1; i>=0; i--)); do umount "${montagens[i]}"; done
-montagens=()
+desmontar
 
 echo 'Empacotando a sessão Live do danasOS'
 cp "$raiz/boot/vmlinuz-$abi" "$midia/casper/vmlinuz"
