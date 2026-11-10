@@ -82,7 +82,7 @@ sed -i \
     -e 's|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' \
     "$raiz/etc/apt/sources.list.d/official-package-repositories.list"
 # O Ubuntu HWE 7.0 rejeita o offset 3 do Acer. Limita a origem mais nova
-# aos pacotes de kernel deste teste e usa o restante do Mint/Noble.
+# ao kernel e ao run-parts exigido pelos scripts desse kernel.
 abi=7.3.0-10-generic
 driver=615
 cat > "$raiz/etc/apt/sources.list.d/danasos-kernel-teste.list" <<'APT'
@@ -91,7 +91,7 @@ deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https:
 deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://security.ubuntu.com/ubuntu stonking-security main restricted
 APT
 cat > "$raiz/etc/apt/preferences.d/danasos-kernel-teste" <<APT
-Package: linux-image-$abi linux-modules-$abi linux-main-modules-v4l2loopback-$abi linux-main-modules-zfs-$abi linux-modules-nvidia-$driver-open-$abi
+Package: debianutils linux-image-$abi linux-modules-$abi linux-main-modules-v4l2loopback-$abi linux-main-modules-zfs-$abi linux-modules-nvidia-$driver-open-$abi
 Pin: release n=stonking
 Pin-Priority: 500
 
@@ -100,6 +100,12 @@ Pin: release n=stonking
 Pin-Priority: -1
 APT
 apt_mint -o APT::Update::Error-Mode=any update
+# O preinst do kernel já usa dois diretórios, então atualize run-parts antes.
+apt_mint install -y --no-install-recommends debianutils/stonking
+for fase in preinst postinst postrm; do
+    mkdir -p "$raiz/etc/kernel/$fase.d" "$raiz/usr/share/kernel/$fase.d"
+done
+no_mint run-parts --test /etc/kernel/preinst.d /usr/share/kernel/preinst.d
 apt_mint install -y --no-install-recommends \
     "linux-image-$abi" "linux-modules-nvidia-$driver-open-$abi" \
     "libnvidia-gl-$driver" "nvidia-utils-$driver" "xserver-xorg-video-nvidia-$driver" \
