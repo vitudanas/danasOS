@@ -49,8 +49,15 @@ Section "OutputClass"
     Identifier "danasOS NVIDIA"
     MatchDriver "nvidia-drm"
     Option "PrimaryGPU" "yes"
+    Option "AllowEmptyInitialConfiguration" "true"
 EndSection
 XORG
+install -D -m 0755 "$repo/scripts/danasos-prime-display.sh" "$raiz/usr/local/sbin/danasos-prime-display"
+mkdir -p "$raiz/etc/lightdm/lightdm.conf.d"
+cat > "$raiz/etc/lightdm/lightdm.conf.d/95-danasos-prime.conf" <<'LIGHTDM'
+[Seat:*]
+display-setup-script=/usr/local/sbin/danasos-prime-display
+LIGHTDM
 cat > "$raiz/etc/default/keyboard" <<'KBD'
 XKBMODEL="abnt2"
 XKBLAYOUT="br"
