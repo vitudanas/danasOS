@@ -34,7 +34,7 @@ if [[ "$edicao" == mint ]]; then
     test -f "$extraido/casper/filesystem.squashfs"
     # O Mint inclui atalhos de repositório que só existem em ISO9660.
     find "$extraido/dists" -type l -delete
-    kernel='^7\.0\.[0-9]+-[0-9]+-generic$'
+    kernel='^7\.3\.0-[0-9]+-generic$'
 else
     test -f "$extraido/live/filesystem.squashfs"
     kernel='^7\.3\.3\+deb14-amd64$'

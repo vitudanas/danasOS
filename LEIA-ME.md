@@ -9,7 +9,9 @@ sudo apt-get install squashfs-tools xorriso initramfs-tools-core sbsigntool zstd
 sudo bash scripts/compilar-mint.sh "$PWD/dist"
 ```
 
-A receita verifica a assinatura da ISO original, instala o kernel HWE e os módulos pré-compilados NVIDIA Open 580 do Ubuntu e gera a ISO, o SHA-256 e um resumo das versões. O GitHub Actions testa o boot em NVMe virtual com FAT32 e Secure Boot e verifica a sessão Xfce e o teclado no console e no Xorg.
+A receita verifica a assinatura da ISO original e inclui o kernel Ubuntu 7.3 assinado e os módulos pré-compilados NVIDIA Open 615 da mesma ABI. O kernel HWE 7.0 da base ainda rejeita o offset VMD observado no Acer. A origem Ubuntu 26.10 fica restrita aos pacotes de kernel durante a compilação. O sistema e os aplicativos continuam usando as fontes do Mint e do Ubuntu 24.04. A imagem de teste fixa a ABI do kernel e deve ser recompilada para atualizá-la.
+
+O construtor gera a ISO, o SHA-256 e um resumo das versões. O GitHub Actions testa o boot em NVMe virtual com FAT32 e Secure Boot e verifica a sessão Xfce e o teclado no console e no Xorg.
 
 Para aprovar o uso no Acer, valide a imagem em hardware com o VMD e o Secure Boot ativos. Confirme que os dois SSDs são detectados sem timeouts, que `nvidia-smi -L` lista a RTX 5070 e que `vulkaninfo --summary` identifica a NVIDIA. Faça o teste em modo Live com o instalador fechado.
 

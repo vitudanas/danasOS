@@ -94,23 +94,42 @@ printf '#!/bin/sh\nexit 101\n' > "$raiz/usr/sbin/policy-rc.d"
 chmod 0755 "$raiz/usr/sbin/policy-rc.d"
 no_mint() { chroot "$raiz" env DEBIAN_FRONTEND=noninteractive LC_ALL=C "$@"; }
 
-echo 'Instalando kernel HWE e NVIDIA Open da Canonical'
+echo 'Instalando kernel Ubuntu 7.3 assinado com o suporte VMD Arrow Lake'
+# O Ubuntu HWE 7.0 rejeita o offset 3 do Acer. Limita a origem mais nova
+# aos pacotes de kernel deste teste e usa o restante do Mint/Noble.
+abi=7.3.0-10-generic
+driver=615
+cat > "$raiz/etc/apt/sources.list.d/danasos-kernel-teste.list" <<'APT'
+deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://archive.ubuntu.com/ubuntu stonking main restricted
+deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://archive.ubuntu.com/ubuntu stonking-updates main restricted
+deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://security.ubuntu.com/ubuntu stonking-security main restricted
+APT
+cat > "$raiz/etc/apt/preferences.d/danasos-kernel-teste" <<APT
+Package: linux-image-$abi linux-modules-$abi linux-main-modules-v4l2loopback-$abi linux-main-modules-zfs-$abi linux-modules-nvidia-$driver-open-$abi
+Pin: release n=stonking
+Pin-Priority: 500
+
+Package: *
+Pin: release n=stonking
+Pin-Priority: -1
+APT
 no_mint apt-get -o APT::Update::Error-Mode=any update
 no_mint apt-get install -y --no-install-recommends \
-    linux-generic-hwe-24.04-edge linux-modules-nvidia-580-open-generic-hwe-24.04-edge \
-    nvidia-driver-580-open nvidia-utils-580 \
+    "linux-image-$abi" "linux-modules-nvidia-$driver-open-$abi" \
+    "libnvidia-gl-$driver" "nvidia-utils-$driver" "xserver-xorg-video-nvidia-$driver" \
     /tmp/danasos-experience_0.2-2_all.deb gnome-software-plugin-flatpak \
     papirus-icon-theme gamemode vulkan-tools mokutil
-abi=$(find "$raiz/boot" -name 'vmlinuz-7.0.*-generic' -printf '%f\n' | sort -V | tail -1)
-abi=${abi#vmlinuz-}
-test -n "$abi"
+rm -- "$raiz/etc/apt/sources.list.d/danasos-kernel-teste.list" "$raiz/etc/apt/preferences.d/danasos-kernel-teste"
+test -s "$raiz/boot/vmlinuz-$abi"
 for modulo in nvidia nvidia_modeset nvidia_drm nvidia_uvm; do
     assinante=$(no_mint modinfo -k "$abi" -F signer "$modulo")
     test -n "$assinante"
     printf '%s %s: %s\n' "$abi" "$modulo" "$assinante"
 done
-test "$(no_mint modinfo -k "$abi" -F version nvidia | cut -d. -f1)" = 580
-if no_mint dpkg-query -W -f='${db:Status-Status}' nvidia-dkms-580-open 2>/dev/null | grep -qx installed; then
+nvidia=$(no_mint modinfo -k "$abi" -F version nvidia)
+test "${nvidia%%.*}" = "$driver"
+test "$(no_mint dpkg-query -W -f='${Version}' "nvidia-utils-$driver" | cut -d- -f1)" = "$nvidia"
+if no_mint dpkg-query -W -f='${db:Status-Status}' "nvidia-dkms-$driver-open" 2>/dev/null | grep -qx installed; then
     echo 'A instalação puxou DKMS em vez de usar apenas os módulos assinados.' >&2
     exit 1
 fi
@@ -163,4 +182,4 @@ xorriso -indev "$tmp/$base" -outdev "$saida/$nome.iso" -boot_image any replay "$
 chmod 0644 "$saida/$nome.iso"
 (cd "$saida" && sha256sum "$nome.iso" > "$nome.sha256")
 printf 'Kernel=%s\nNVIDIA=%s\nVMD_Acer=validacao_fisica_pendente\n' \
-    "$abi" "$(no_mint modinfo -k "$abi" -F version nvidia)" > "$saida/$nome.info"
+    "$abi" "$nvidia" > "$saida/$nome.info"
