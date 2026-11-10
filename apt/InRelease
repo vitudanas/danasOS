@@ -1,0 +1,23 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Valid-Until: Mon, 08 Feb 2027 18:30:14 GMT
+Date: Tue, 10 Nov 2026 18:30:14 +0000
+Label: danasOS
+Origin: danasOS
+MD5Sum:
+ 99473ec764a83bb5d004cb6abad6acac              739 Packages
+SHA1:
+ 90039aa83da8519e37cfb8e012906ca718fa5376              739 Packages
+SHA256:
+ fd93d688772d1bbca4d34ec6593d2f931b31489d579da5b142a43cd0f9325bbd              739 Packages
+SHA512:
+ 6e0ae75d7db7cd90197d3517b43fe0bf3ec05595503d5191991b4b523a9feb89c9b4287a1ebd98b1b825bb44526ac88322dd7d52ff7b24721a0771a263f9550c              739 Packages
+
+-----BEGIN PGP SIGNATURE-----
+
+iHUEARYKAB0WIQQD8RALIsbJdgl3BC4PzsHwBMl+awUCavONFwAKCRAPzsHwBMl+
+a52SAP9iIuGh6QYvKzPMrQBLhhqEAEVEa3b3MssRRx02w1LvdAEA5Kvo9NLwSD4u
+Qa/hDzM9bAP1WzgPMa+QgWj2CLHJEgE=
+=TSHq
+-----END PGP SIGNATURE-----

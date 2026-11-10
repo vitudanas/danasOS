@@ -1,0 +1,16 @@
+Package: danasos-experience
+Architecture: all
+Version: 0.4-1
+Priority: optional
+Section: x11
+Maintainer: danasOS Project <maintainers@danasos.invalid>
+Depends: python3-gi, gir1.2-gtk-3.0, gnome-software, flatpak, xfce4-terminal, pkexec
+Filename: ./danasos-experience_0.4-1_all.deb
+Size: 622332
+MD5sum: e1f99f18467226f412ed752ec5927bcd
+SHA1: f8c4bfa1727fd7d3fa2754b72ebef9ceb21b949b
+SHA256: 0578a70ee2ad696fc301384961afde35e14e47d52225de1aa19c79b188ae91d9
+SHA512: 9e7b87d24e49981dc5aee0b46a0f7ee9d8e02dc5438da8f06254472309092909a4ea1d89f035ef19c579142eb07da4e05cae04c2ddd9bd4fe60603ad26643573
+Description: danasOS desktop identity and gaming hub
+X-DanasOS-Changes: Canal assinado, Central reorganizada, configurações e tamanho do texto.
+
