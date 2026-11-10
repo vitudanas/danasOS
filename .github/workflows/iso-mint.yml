@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: iso-mint-${{ github.ref }}
+  group: iso-mint-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -36,6 +36,7 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends squashfs-tools xorriso initramfs-tools-core sbsigntool zstd qemu-system-x86 ovmf gdisk mtools socat
       - name: Compilar Mint Xfce HWE com NVIDIA Open
+        timeout-minutes: 40
         run: sudo bash scripts/compilar-mint.sh "$RUNNER_TEMP/danasos-mint"
       - name: Testar boot UEFI, Secure Boot, NVMe FAT32, Xfce e ABNT2
         run: |
@@ -44,7 +45,7 @@ jobs:
           (cd "$pasta" && sha256sum -c danasOS-0.3-amd64-mint-hwe.sha256)
           bash scripts/verificar-iso-vmd.sh "$pasta/danasOS-0.3-amd64-mint-hwe.iso" "$RUNNER_TEMP/boot-mint.ppm" mint
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: failure()
+        if: always()
         with:
           name: tela-vm-mint
           path: ${{ runner.temp }}/boot-mint.ppm

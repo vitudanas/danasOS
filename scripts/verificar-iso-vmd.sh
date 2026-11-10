@@ -67,6 +67,12 @@ for tentativa in $(seq 1 150); do
         grep -E "$kernel" "$serial"
         grep -F 'SecureBoot enabled' "$serial"
         grep -E '^/dev/nvme0n1p1[[:space:]]+vfat' "$serial"
+        if [[ "$edicao" == mint ]]; then
+            # O processo da sessão pode surgir antes de o painel e o desktop desenharem.
+            sleep 25
+            comando_vm "screendump $captura"
+            test -s "$captura"
+        fi
         exit 0
     fi
     kill -0 "$vm"

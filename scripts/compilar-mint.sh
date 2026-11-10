@@ -25,7 +25,8 @@ limpar() {
 trap limpar EXIT
 baixar() {
     curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
-        --retry 3 --output "$2" "$1"
+        --connect-timeout 20 --speed-time 40 --speed-limit 1024 --max-time 480 \
+        --retry 2 --output "$2" "$1"
 }
 
 echo 'Verificando origem e assinatura da ISO Mint'
@@ -93,6 +94,7 @@ fi
 printf '#!/bin/sh\nexit 101\n' > "$raiz/usr/sbin/policy-rc.d"
 chmod 0755 "$raiz/usr/sbin/policy-rc.d"
 no_mint() { chroot "$raiz" env DEBIAN_FRONTEND=noninteractive LC_ALL=C "$@"; }
+apt_mint() { no_mint apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 "$@"; }
 
 echo 'Instalando kernel Ubuntu 7.3 assinado com o suporte VMD Arrow Lake'
 # O Ubuntu HWE 7.0 rejeita o offset 3 do Acer. Limita a origem mais nova
@@ -113,8 +115,8 @@ Package: *
 Pin: release n=stonking
 Pin-Priority: -1
 APT
-no_mint apt-get -o APT::Update::Error-Mode=any update
-no_mint apt-get install -y --no-install-recommends \
+apt_mint -o APT::Update::Error-Mode=any update
+apt_mint install -y --no-install-recommends \
     "linux-image-$abi" "linux-modules-nvidia-$driver-open-$abi" \
     "libnvidia-gl-$driver" "nvidia-utils-$driver" "xserver-xorg-video-nvidia-$driver" \
     /tmp/danasos-experience_0.2-2_all.deb gnome-software-plugin-flatpak \
@@ -137,7 +139,7 @@ for antigo in "$raiz"/boot/vmlinuz-*; do
     antigo=${antigo##*/vmlinuz-}
     if [[ "$antigo" != "$abi" && "$antigo" =~ ^[0-9.]+-[0-9]+-generic$ ]]; then
         mapfile -t pacotes < <(no_mint dpkg-query -W -f='${binary:Package}\n' "linux-*-${antigo%-generic}*" || true)
-        if (("${#pacotes[@]}")); then no_mint apt-get purge -y "${pacotes[@]}"; fi
+        if (("${#pacotes[@]}")); then apt_mint purge -y "${pacotes[@]}"; fi
     fi
 done
 no_mint flatpak --system remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
@@ -168,7 +170,16 @@ cp "$raiz/boot/initrd.img-$abi" "$midia/casper/initrd.lz"
 no_mint dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\n' | \
     awk '$1 == "ii" {print $2 "\t" $3}' > "$midia/casper/filesystem.manifest"
 du -sx --block-size=1 "$raiz" | cut -f1 > "$midia/casper/filesystem.size"
-mksquashfs "$raiz" "$midia/casper/filesystem.squashfs" -noappend -comp xz -b 1M -no-progress -processors 4
+compactar() {
+    mksquashfs "$raiz" "$midia/casper/filesystem.squashfs" -noappend \
+        -b 1M -no-progress -processors 4 "$@"
+}
+compactar -comp zstd -Xcompression-level 15
+if (("$(du -sb "$midia" | cut -f1)" > 4250000000)); then
+    echo 'Recompactando em XZ para o DANASLIVE de 4 GiB'
+    compactar -comp xz
+fi
+test "$(du -sb "$midia" | cut -f1)" -le 4250000000
 python3 "$repo/scripts/midia-mint.py" "$midia"
 mapear=()
 for arquivo in casper/vmlinuz casper/initrd.lz casper/filesystem.squashfs \
