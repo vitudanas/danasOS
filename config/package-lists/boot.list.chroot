@@ -6,4 +6,6 @@ os-prober
 live-boot
 live-config
 live-config-systemd
+user-setup
+console-setup
 cryptsetup-initramfs

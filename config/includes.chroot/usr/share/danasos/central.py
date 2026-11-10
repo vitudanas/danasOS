@@ -80,10 +80,13 @@ class Central(Gtk.Window):
 
         acoes = Gtk.FlowBox(column_spacing=8, row_spacing=8, homogeneous=True)
         acoes.set_selection_mode(Gtk.SelectionMode.NONE)
+        driver = ["xfce4-terminal", "--hold", "--execute", "sudo", "danasos-driver-nvidia"]
+        if Path("/etc/danasos/base-mint").is_file():
+            driver = ["driver-manager"]
         for titulo, argumentos in (
             ("Loja de aplicativos", ["gnome-software"]),
             ("Atualizações", None),
-            ("Driver NVIDIA", ["xfce4-terminal", "--hold", "--execute", "sudo", "danasos-driver-nvidia"]),
+            ("Driver NVIDIA", driver),
             ("Diagnóstico", ["xfce4-terminal", "--hold", "--execute", "danasos-diagnostico"]),
             ("Configurações", ["xfce4-settings-manager"]),
         ):
@@ -103,16 +106,17 @@ class Central(Gtk.Window):
         grade.set_selection_mode(Gtk.SelectionMode.NONE)
         instalados = self.listar_flatpaks()
         for nome, descricao, flatpak in APLICATIVOS:
-            comando = ["flatpak", "run", flatpak]
             instalado = flatpak in instalados
+            comando = ["flatpak", "run", flatpak] if instalado else [
+                "xfce4-terminal", "--hold", "--execute", "flatpak", "install", "--system", "flathub", flatpak,
+            ]
             botao = Gtk.Button()
             botao.get_style_context().add_class("cartao")
             linhas = caixa(3)
             linhas.pack_start(rotulo(nome, "secao"), False, False, 0)
             linhas.pack_start(rotulo(descricao, "detalhe"), False, False, 0)
-            linhas.pack_start(rotulo("ABRIR" if instalado else "PENDENTE", "rodape"), False, False, 0)
+            linhas.pack_start(rotulo("ABRIR" if instalado else "INSTALAR", "rodape"), False, False, 0)
             botao.add(linhas)
-            botao.set_sensitive(instalado)
             botao.connect("clicked", lambda _, cmd=comando: self.abrir(cmd))
             grade.add(botao)
         conteudo.pack_start(grade, False, False, 0)

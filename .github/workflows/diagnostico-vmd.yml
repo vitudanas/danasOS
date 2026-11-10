@@ -1,0 +1,68 @@
+name: Preparar diagnóstico VMD
+
+on:
+  push:
+    branches: [fix/acer-vmd-live]
+    paths:
+      - '.github/workflows/diagnostico-vmd.yml'
+      - 'scripts/diagnostico-vmd.sh'
+      - 'config/includes.chroot/etc/initramfs-tools/modules'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostico:
+    if: github.repository == 'vitudanas/danasOS'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Montar kernel e initramfs de diagnóstico
+        run: |
+          set -eu
+          mkdir "$RUNNER_TEMP/danas-vmd"
+          docker run --rm \
+            -e "SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$GITHUB_SHA")" \
+            -v "$GITHUB_WORKSPACE:/src:ro" \
+            -v "$RUNNER_TEMP/danas-vmd:/out" \
+            debian:13-slim sh -ec '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates initramfs-tools busybox kmod udev zstd sbsigntool
+              sh /src/scripts/diagnostico-vmd.sh /out
+            '
+      - name: Conferir boot e NVMe virtual
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends qemu-system-x86
+          cd "$RUNNER_TEMP/danas-vmd"
+          sha256sum -c SHA256SUMS
+          disco="$RUNNER_TEMP/nvme-teste.raw"
+          serial="$RUNNER_TEMP/vmd-serial.log"
+          truncate -s 64M "$disco"
+          qemu-system-x86_64 -machine q35,accel=tcg -smp 2 -m 1536 \
+            -display none -serial "file:$serial" -monitor none -nic none -no-reboot \
+            -kernel vmlinuz -initrd initrd.img -append 'console=ttyS0 break=mount ro' \
+            -drive "id=nvmedisk,file=$disco,format=raw,if=none" \
+            -device nvme,drive=nvmedisk,serial=danas-vmd &
+          vm=$!
+          trap 'kill "$vm" 2>/dev/null || true; cat "$serial"' EXIT
+          for _ in $(seq 1 90); do
+            if grep -q DANASOS_VMD_DIAGNOSTICO_PRONTO "$serial"; then
+              grep -E '(^|[[:space:]])nvme0n1([[:space:]]|$)' "$serial"
+              exit
+            fi
+            kill -0 "$vm"
+            sleep 2
+          done
+          exit 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: danas-vmd
+          path: ${{ runner.temp }}/danas-vmd
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 2
