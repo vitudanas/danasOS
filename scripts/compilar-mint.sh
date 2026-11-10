@@ -97,6 +97,11 @@ no_mint() { chroot "$raiz" env DEBIAN_FRONTEND=noninteractive LC_ALL=C "$@"; }
 apt_mint() { no_mint apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 "$@"; }
 
 echo 'Instalando kernel Ubuntu 7.3 assinado com o suporte VMD Arrow Lake'
+# Evita as transferências lentas de firmware pelo endpoint HTTP da imagem base.
+sed -i \
+    -e 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+    -e 's|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' \
+    "$raiz/etc/apt/sources.list.d/official-package-repositories.list"
 # O Ubuntu HWE 7.0 rejeita o offset 3 do Acer. Limita a origem mais nova
 # aos pacotes de kernel deste teste e usa o restante do Mint/Noble.
 abi=7.3.0-10-generic
@@ -143,6 +148,12 @@ for antigo in "$raiz"/boot/vmlinuz-*; do
     fi
 done
 no_mint flatpak --system remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+for aplicativo in org.gnome.Software gnome-software-service mintwelcome; do
+    entrada="/etc/xdg/autostart/$aplicativo.desktop"
+    if test -f "$raiz$entrada"; then
+        no_mint dpkg-divert --local --rename --add "$entrada"
+    fi
+done
 no_mint localedef -i pt_BR -f UTF-8 pt_BR.UTF-8
 no_mint setupcon --save-only
 no_mint update-initramfs -u -k "$abi"

@@ -2,6 +2,8 @@
 
 A edição 0.3 usa o Linux Mint 22.3 Xfce HWE, baseado no Ubuntu 24.04. A imagem inclui o tema Noite em Neon, a Central, o teclado ABNT2 e o catálogo Flathub com Steam, Heroic, Lutris e os demais launchers. A instalação usa o instalador do Mint. A Central abre o Gerenciador de Drivers do Mint e continua oferecendo o canal APT assinado de `danasos-experience`.
 
+GameMode e Vulkan entram na imagem. A loja e a tela de boas-vindas ficam acessíveis pelo menu. As notificações de atualização do Mint continuam no desktop.
+
 No Ubuntu 24.04 amd64, com pelo menos 25 GiB livres no diretório temporário, execute:
 
 ```sh
