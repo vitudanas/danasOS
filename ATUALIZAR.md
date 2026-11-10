@@ -8,6 +8,7 @@ No terminal do **danasOS instalado**, copie o bloco abaixo uma vez. Ele baixa ar
 (
   set -eu
   pasta=$(mktemp -d)
+  pasta=$(cd "$pasta" && pwd -P)
   trap 'rm -rf -- "$pasta"' EXIT
   cd "$pasta"
   canal=https://vitudanas.github.io/danasOS
@@ -19,15 +20,26 @@ No terminal do **danasOS instalado**, copie o bloco abaixo uma vez. Ele baixa ar
     exit 0
   fi
   mkdir -m 700 gnupg
+  gpg_local() { gpg --no-options --homedir "$pasta/gnupg" --batch "$@"; }
   baixar() { curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --output "$2" "$canal/$1"; }
   baixar danasos-release.asc publica.asc
   baixar "apt/$pacote" "$pacote"
   baixar "$pacote.sig" "$pacote.sig"
-  gpg --homedir "$pasta/gnupg" --batch --with-colons --show-keys publica.asc > chave.txt
-  test "$(awk -F: '$1=="pub" {n++} END {print n+0}' chave.txt)" = 1
-  test "$(awk -F: '$1=="fpr" {print $10; exit}' chave.txt)" = "$chave"
-  gpg --homedir "$pasta/gnupg" --batch --dearmor --output publica.gpg publica.asc
-  gpgv --homedir "$pasta/gnupg" --keyring "$pasta/publica.gpg" "$pacote.sig" "$pacote"
+
+  gpg_local --import "$pasta/publica.asc"
+  gpg_local --with-colons --fingerprint --list-keys > chave.txt
+  if [ "$(awk -F: '$1=="pub" {n++} END {print n+0}' chave.txt)" != 1 ] ||
+     [ "$(awk -F: '$1=="fpr" {print $10; exit}' chave.txt)" != "$chave" ]; then
+    printf '%s\n' 'Chave recusada: o fingerprint não corresponde ao canal oficial.' >&2
+    exit 1
+  fi
+  printf 'Fingerprint confirmado: %s\n' "$chave"
+  gpg_local --output "$pasta/publica.gpg" --export "$chave"
+  test -s "$pasta/publica.gpg"
+  gpgv --homedir "$pasta/gnupg" --keyring "$pasta/publica.gpg" --status-fd 1 \
+    "$pasta/$pacote.sig" "$pasta/$pacote" > assinatura.txt
+  awk -v fpr="$chave" '$1=="[GNUPG:]" && $2=="VALIDSIG" && $3==fpr {ok=1} END {exit !ok}' assinatura.txt
+  printf '%s\n' 'Assinatura oficial do pacote confirmada.'
   sudo apt install "./$pacote"
 )
 ```
