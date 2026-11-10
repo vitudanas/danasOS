@@ -15,6 +15,8 @@ sudo bash scripts/compilar-mint.sh "$PWD/dist"
 
 A receita verifica a assinatura da ISO original e inclui o kernel Ubuntu 7.3 assinado e os módulos pré-compilados NVIDIA Open 615 da mesma ABI. O kernel HWE 7.0 da base ainda rejeita o offset VMD observado no Acer. A origem Ubuntu 26.10 fica restrita aos pacotes de kernel e à versão de `debianutils` exigida pelos scripts do kernel durante a compilação. O sistema e os aplicativos continuam usando as fontes do Mint e do Ubuntu 24.04. A imagem de teste fixa a ABI do kernel e deve ser recompilada para atualizá-la.
 
+O Xorg prefere a NVIDIA quando o driver está disponível. Se o LightDM encontrar a NVIDIA como fonte e o driver `modesetting` como saída de vídeo, ele conecta os dois pelo [PRIME](https://download.nvidia.com/XFree86/Linux-x86_64/580.65.06/README/randr14.html) antes do login. Isso permite renderizar na NVIDIA quando o painel está conectado à GPU integrada.
+
 O construtor gera a ISO, o SHA-256 e um resumo das versões. O GitHub Actions testa o boot em NVMe virtual com FAT32 e Secure Boot e verifica a sessão Xfce e o teclado no console e no Xorg.
 
 Para aprovar o uso no Acer, valide a imagem em hardware com o VMD e o Secure Boot ativos. Confirme que os dois SSDs são detectados sem timeouts, que `nvidia-smi -L` lista a RTX 5070 e que `vulkaninfo --summary` identifica a NVIDIA. Faça o teste em modo Live com o instalador fechado.
@@ -73,7 +75,7 @@ O GitHub Actions usa a data do commit como `SOURCE_DATE_EPOCH`. Para repetir ess
 
 ## Atualizações pela loja e pelo GitHub
 
-Na **Central danasOS → Atualizações → Abrir loja**, a loja mostra atualizações do Debian e do Flathub. O pacote `danasos-experience`, instalado durante a construção da ISO, permite distribuir novas versões da Central e do tema pelo mesmo fluxo.
+Na **Central danasOS → Atualizações → Abrir loja**, a loja mostra atualizações dos aplicativos. A edição Mint usa o Gerenciador de Atualizações do Mint para o sistema. O pacote `danasos-experience`, instalado durante a construção da ISO, permite distribuir novas versões da Central e do tema nas duas edições.
 
 A instalação automática vem desligada. Depois de cadastrar o canal assinado, selecione **Central danasOS → Atualizações → Ativar automática** e autorize com a senha do sistema. O agendador verifica o canal diariamente, instala somente versões mais novas de `danasos-experience` e registra o resultado em `journalctl -u danasos-auto-update.service`. A instalação usa índices separados dos repositórios do sistema e exige a assinatura da chave cadastrada. A opção **Desativar automática** cancela as próximas verificações.
 
@@ -92,7 +94,7 @@ Salve a chave pública que recebeu do mantenedor e confira o fingerprint por um 
 sudo danasos-canal-github https://USUARIO.github.io/REPOSITORIO/apt/ ./danasos-publica.asc FINGERPRINT_COMPLETO
 ```
 
-Abra **Central danasOS → Atualizações** e atualize a lista. O canal APT aceita somente o pacote `danasos-experience` do host configurado, com a assinatura da chave cadastrada. Os outros pacotes continuam nas fontes do Debian e do Flathub. Use uma nova compilação da ISO para mudanças nos pacotes de base ou no instalador. A publicação e a conexão dependem de um repositório GitHub Pages e de uma chave ainda não configurados.
+Abra **Central danasOS → Atualizações** e atualize a lista. O canal APT aceita somente o pacote `danasos-experience` do host configurado, com a assinatura da chave cadastrada. Os demais pacotes continuam nas fontes da distribuição e do Flathub. Use uma nova compilação da ISO para mudanças nos pacotes de base ou no instalador. A publicação e a conexão dependem de um repositório GitHub Pages e de uma chave ainda não configurados.
 
 ## Validar antes de usar no Acer
 
