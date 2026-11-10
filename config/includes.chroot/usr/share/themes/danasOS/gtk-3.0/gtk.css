@@ -11,6 +11,12 @@ window, dialog, .background { background-color: #1b1326; color: #f2e8fc; }
 headerbar, .titlebar { background-image: none; background-color: #2a193a; }
 menu, .menu, popover { background-color: #21162d; }
 menuitem:hover { background-color: #613e81; color: #ffffff; }
+button { border-radius: 8px; }
+button:focus, switch:focus { outline-color: #b7f878; }
+button:disabled, entry:disabled { opacity: 0.62; }
+entry, combobox button { border-radius: 8px; }
+notebook tab:checked { box-shadow: inset 0 -2px #b7f878; }
+tooltip.background { background-color: #21162d; color: #f2e8fc; }
 button.suggested-action { background-image: none; background-color: #b7f878; color: #13200a; }
 button.suggested-action:hover { background-color: #cfffa3; }
 entry:focus { border-color: #a5d960; box-shadow: inset 0 0 0 1px #a5d960; }

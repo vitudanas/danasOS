@@ -8,15 +8,28 @@ import subprocess
 COMANDOS = (
     ("uname", "-r"),
     ("mokutil", "--sb-state"),
+    ("modinfo", "-F", "signer", "nvidia"),
+    ("prime-select", "query"),
     ("lspci", "-nnk"),
     ("nmcli", "device", "status"),
     ("wpctl", "status"),
     ("xrandr", "--current"),
     ("nvidia-smi", "-L"),
     ("vulkaninfo", "--summary"),
+    ("glxinfo", "-B"),
+    ("vainfo",),
     ("flatpak", "list", "--app"),
     ("systemd-analyze", "time"),
     ("free", "-h"),
+    ("swapon", "--show"),
+    ("zramctl",),
+    ("lsblk", "-o", "NAME,TYPE,ROTA,DISC-MAX,FSTYPE"),
+    ("systemctl", "is-enabled", "fstrim.timer"),
+    ("powerprofilesctl", "get"),
+    ("gamemoded", "-s"),
+    ("mangohud", "--version"),
+    ("gamescope", "--version"),
+    ("bluetoothctl", "show"),
 )
 
 for comando in COMANDOS:
