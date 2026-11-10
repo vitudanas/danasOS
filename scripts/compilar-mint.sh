@@ -130,8 +130,12 @@ if test -s "$tmp/pacotes-aria2"; then
         --connect-timeout=8 --timeout=15 --max-tries=4 --retry-wait=1 \
         --summary-interval=30 --console-log-level=warn
 fi
+echo 'Completando pelo APT os downloads que não exportaram SHA-256'
+timeout --kill-after=10s 3m chroot "$raiz" env DEBIAN_FRONTEND=noninteractive LC_ALL=C \
+    apt-get -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 -o Acquire::Retries=1 \
+    --download-only install -y --no-install-recommends "${pacotes[@]}"
 echo 'Instalando os pacotes já verificados'
-apt_mint --no-download install -y --no-install-recommends "${pacotes[@]}"
+apt_mint --no-download -o Dpkg::Use-Pty=0 install -y --no-install-recommends "${pacotes[@]}"
 apt_mint install -y --no-install-recommends /tmp/danasos-experience_0.2-2_all.deb
 rm -- "$raiz/etc/apt/sources.list.d/danasos-kernel-teste.list" "$raiz/etc/apt/preferences.d/danasos-kernel-teste"
 test -s "$raiz/boot/vmlinuz-$abi"
