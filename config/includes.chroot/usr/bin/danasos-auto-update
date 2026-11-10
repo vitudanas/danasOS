@@ -141,7 +141,10 @@ def baixar(dados):
 
 
 def instalar(arquivo, downgrade=False):
-    args = ["--no-download", "--no-remove", "--no-install-recommends", "install", str(arquivo)]
+    # O arquivo já veio de um índice assinado e passou pela checagem de SHA-256.
+    # Exclua as origens da simulação para analisar somente esse .deb e o estado instalado.
+    args = ["-o", "Dir::Etc::sourcelist=/dev/null", "--no-remove",
+            "--no-install-recommends", "install", str(arquivo)]
     simulacao = apt("apt-get", "--simulate", *args)
     instalacao = False
     for linha in simulacao.splitlines():
@@ -152,8 +155,8 @@ def instalar(arquivo, downgrade=False):
             instalacao |= partes[0] == "Inst"
     if not instalacao:
         raise ValueError("O APT não confirmou a instalação.")
-    opcoes = ["--allow-downgrades"] if downgrade else []
-    apt("apt-get", "-y", *opcoes, *args)
+    opcao = "--force-downgrade" if downgrade else "--no-force-downgrade"
+    rodar("dpkg", opcao, "--install", str(arquivo))
 
 
 def desativar():
