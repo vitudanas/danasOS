@@ -27,8 +27,10 @@ def chave_publica(arquivo, fingerprint):
     if not dados.startswith(b"-----BEGIN PGP PUBLIC KEY BLOCK-----"):
         raise ValueError("Forneça somente a chave pública OpenPGP no formato .asc.")
     with tempfile.TemporaryDirectory(prefix="danasos-chave-") as pasta:
+        copia = Path(pasta) / "chave.asc"
+        copia.write_bytes(dados)
         metadados = subprocess.check_output(
-            ["gpg", "--homedir", pasta, "--batch", "--with-colons", "--show-keys", str(arquivo)],
+            ["gpg", "--homedir", pasta, "--batch", "--with-colons", "--show-keys", str(copia)],
             text=True,
         ).splitlines()
     tipos = [linha.split(":")[0] for linha in metadados]
