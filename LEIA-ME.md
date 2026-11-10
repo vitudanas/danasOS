@@ -1,4 +1,19 @@
-# danasOS 0.2 • Noite em Neon
+# Edição Mint HWE
+
+A edição 0.3 usa o Linux Mint 22.3 Xfce HWE, baseado no Ubuntu 24.04. A imagem inclui o tema Noite em Neon, a Central, o teclado ABNT2 e o catálogo Flathub com Steam, Heroic, Lutris e os demais launchers. A instalação usa o instalador do Mint. A Central abre o Gerenciador de Drivers do Mint e continua oferecendo o canal APT assinado de `danasos-experience`.
+
+No Ubuntu 24.04 amd64, com pelo menos 25 GiB livres no diretório temporário, execute:
+
+```sh
+sudo apt-get install squashfs-tools xorriso initramfs-tools-core sbsigntool zstd
+sudo bash scripts/compilar-mint.sh "$PWD/dist"
+```
+
+A receita verifica a assinatura da ISO original, instala o kernel HWE e os módulos pré-compilados NVIDIA Open 580 do Ubuntu e gera a ISO, o SHA-256 e um resumo das versões. O GitHub Actions testa o boot em NVMe virtual com FAT32 e Secure Boot e verifica a sessão Xfce e o teclado no console e no Xorg.
+
+Para aprovar o uso no Acer, valide a imagem em hardware com o VMD e o Secure Boot ativos. Confirme que os dois SSDs são detectados sem timeouts, que `nvidia-smi -L` lista a RTX 5070 e que `vulkaninfo --summary` identifica a NVIDIA. Faça o teste em modo Live com o instalador fechado.
+
+# Edição Debian 13 · danasOS 0.2
 
 Projeto de distribuição Linux para jogos, com identidade, tema, configuração e receita de imagem próprios. A base de pacotes e atualizações é o Debian 13. A área de trabalho é Xfce e o instalador gráfico é Calamares.
 
