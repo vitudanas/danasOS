@@ -38,7 +38,8 @@ OPCOES = (
     "--iso-application", "danasOS",
     "--iso-volume", "DANASOS_02_AMD64",
     "--bootappend-live",
-    "boot=live components hostname=danasos username=live locales=pt_BR.UTF-8 keyboard-layouts=br quiet",
+    "boot=live components hostname=danasos username=live locales=pt_BR.UTF-8 "
+    "keyboard-model=abnt2 keyboard-layouts=br quiet",
 )
 
 

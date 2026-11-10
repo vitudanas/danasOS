@@ -12,4 +12,10 @@ StandardOutput=tty
 StandardError=inherit
 TTYPath=/dev/ttyS0
 Environment=LC_ALL=C
-ExecStart=/bin/sh -ec 'while ! pgrep -x xfce4-session >/dev/null; do sleep 2; done; uname -r; mokutil --sb-state; findmnt -n -o SOURCE,FSTYPE /run/live/medium; echo DANASOS_XFCE_PRONTO'
+ExecStart=/bin/sh -ec 'while ! pgrep -u live -x xfce4-session >/dev/null; do sleep 2; done'
+ExecStart=/bin/sh -ec 'dumpkeys --console=/dev/tty1 --keys-only | grep -E "^keycode[[:space:]]+39[[:space:]]*=[[:space:]]*([+]?ccedilla|U[+]00[eE]7)([[:space:]]|$)"'
+ExecStart=/bin/sh -ec 'layout=$(runuser -u live -- env DISPLAY=:0 XAUTHORITY=/home/live/.Xauthority setxkbmap -query); echo "$layout"; echo "$layout" | grep -Eq "^model:[[:space:]]+abnt2$"; echo "$layout" | grep -Eq "^layout:[[:space:]]+br$"'
+ExecStart=/usr/bin/uname -r
+ExecStart=/usr/bin/mokutil --sb-state
+ExecStart=/usr/bin/findmnt -n -o SOURCE,FSTYPE /run/live/medium
+ExecStart=/usr/bin/echo DANASOS_XFCE_PRONTO
